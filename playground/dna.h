@@ -1,10 +1,16 @@
 #ifndef DNA_H
 #define DNA_H
 
+#include "common.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-uint8_t *generateDna(const char *dna_str, const size_t dna_len);
-char *to_string(uint8_t *m_data, size_t m_len);
+
+size_t dna_get_length(DNA dna);
+DNA dna_string_to_DNA(const char *dna_str);
+char *dna_DNA_to_string(DNA);
+bool dna_equals(DNA sequence1, DNA sequence2);
 
 #endif
