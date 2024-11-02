@@ -40,5 +40,8 @@ int main(int argc, char **argv) {
 
   printf("%d\n", qkmer_contains(qkmer1,kmer));
 
+  free(qkmer1.data);
+  free(kmer.data);
+
   return 0;
 }
