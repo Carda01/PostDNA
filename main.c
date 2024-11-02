@@ -1,6 +1,5 @@
-#include "dna.h"
-#include "kmer.h"
 #include "common.h"
+#include "dna.h"
 #include <stdint.h>
 #include <stdio.h>
 

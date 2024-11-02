@@ -1,5 +1,2 @@
-# playground phase, remove later
-playground/*.o
-playground/output
-Makefile
-postdna*
+*.o
+output
