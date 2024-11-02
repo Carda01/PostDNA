@@ -76,3 +76,8 @@ char* com_decode(uint8_t* data, size_t sequence_len){
   sequence[sequence_len] = '\0';
   return sequence;
 }
+
+
+size_t com_get_num_generable_kmers(size_t dna_len, uint8_t k){
+  return dna_len - k + 1;
+}

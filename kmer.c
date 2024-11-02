@@ -1,4 +1,5 @@
 #include "kmer.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -37,4 +38,12 @@ bool kmer_equals(KMER kmer1, KMER kmer2) {
   }
 
   return true;
+}
+
+void kmer_print_list_kmers(KMER *kmers, size_t num_kmers){
+  printf("\n");
+  for (size_t i = 0; i < num_kmers; ++i){
+    printf("%s\n", kmer_KMER_to_string(kmers[i]));
+  }
+  printf("\n");
 }

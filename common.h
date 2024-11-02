@@ -1,6 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -31,5 +32,7 @@ void com_print_binary(const uint8_t value);
 size_t com_get_number_of_bytes(size_t dna_len);
 uint8_t* com_encode(const char *sequence, const size_t sequence_len);
 char* com_decode(uint8_t* data, size_t sequence_len);
+
+size_t com_get_num_generable_kmers(size_t dna_len, uint8_t k);
 
 #endif
