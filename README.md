@@ -7,5 +7,6 @@ Task | Notes | Assignee | Done
 Prototyping data type for DNA and Kmers | - | Alfio | [ ]
 Researching how to encode qkmers | - | Marwa | [ ]
 Researching index | - | | [ ]
-Writing report | - | !Alfio =P | [ ]
+Creating benchmark | Create both a dataset and queries that can challenge our database | | [ ]
+Writing report | - | not Alfio =P | [ ]
 

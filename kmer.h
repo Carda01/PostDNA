@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 uint8_t kmer_get_length(KMER kmer);
 KMER kmer_string_to_KMER(const char *kmer_str);
