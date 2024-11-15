@@ -1,9 +1,10 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "postgres.h"
+#include "fmgr.h"
 
 #define BASE_MASK 0x3 // Binary: 11.
 
@@ -34,8 +35,9 @@ enum {
 
 
 typedef struct {
-    size_t length;
-    uint8_t *data;
+    int32 struct_size;
+    int32 length;
+    uint8_t data[FLEXIBLE_ARRAY_MEMBER];
 } DNA;
 
 
@@ -48,6 +50,7 @@ typedef struct {
     uint8_t k;
     uint8_t *data;
 } QKMER;
+
 
 void com_print_binary(const uint8_t value);
 size_t com_get_number_of_bytes(size_t dna_len);

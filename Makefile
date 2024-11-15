@@ -1,22 +1,14 @@
-output: main.o dna.o kmer.o qkmer.o common.o
-	gcc main.o dna.o kmer.o qkmer.o common.o -o output
+EXTENSION = postdna 
+MODULE_big = postdna
 
-main.o: main.c
-	gcc -c main.c
+OBJS = postdna.o dna.o kmer.o qkmer.o common.o
+DATA = postdna--1.0.sql
+HEADERS_postdna = dna.h kmer.h qkmer.h common.h
 
-dna.o: dna.c dna.h
-	gcc -c dna.c
+PG_CONFIG = pg_config
+PGXS = $(shell $(PG_CONFIG) --pgxs)
 
-kmer.o: kmer.c kmer.h
-	gcc -c kmer.c
+CFLAGS += -flto -emit-llvm
+LDFLAGS += -flto
 
-qkmer.o: qkmer.c qkmer.h
-	gcc -c qkmer.c
-
-common.o: common.c common.h
-	gcc -c common.c
-
-clean: 
-	rm *.o output
-
-
+include $(PGXS)
