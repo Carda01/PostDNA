@@ -5,31 +5,31 @@
  * Input/Output
  ******************************************************************************/
 
-CREATE OR REPLACE FUNCTION dna_dna_in(cstring)
+CREATE OR REPLACE FUNCTION dna_in(cstring)
   RETURNS dna
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION dna_dna_out(dna)
+CREATE OR REPLACE FUNCTION dna_out(dna)
   RETURNS cstring
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE TYPE dna (
-  input          = dna_DNA_in,
-  output         = dna_DNA_out
+  input          = dna_in,
+  output         = dna_out
 );
 
 COMMENT ON TYPE dna IS 'sequence of nucleotids (ACGT) without a max length';
 
 CREATE OR REPLACE FUNCTION dna(text)
   RETURNS dna
-  AS 'MODULE_PATHNAME', 'dna_dna_cast_from_text'
+  AS 'MODULE_PATHNAME', 'dna_cast_from_text'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION text(dna)
   RETURNS text
-  AS 'MODULE_PATHNAME', 'dna_dna_cast_to_text'
+  AS 'MODULE_PATHNAME', 'dna_cast_to_text'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE CAST (text as dna) WITH FUNCTION dna(text) AS IMPLICIT;
