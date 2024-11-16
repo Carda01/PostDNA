@@ -9,12 +9,9 @@ size_t dna_get_length(DNA* dna) { return com_get_length(dna); }
 
 DNA* dna_string_to_DNA(const char *dna_str) {
   const size_t dna_length = strlen(dna_str);
-  const size_t num_bytes = com_get_number_of_bytes(dna_length);
+  size_t num_bytes;
+  uint8_t* data = com_encode(dna_str, dna_length, &num_bytes);
 
-  uint8_t* data = malloc(num_bytes);
-  memset(data, 0, num_bytes);
-
-  com_encode2(dna_str, data, dna_length);
   DNA *dna = (DNA *) palloc(sizeof(DNA) + num_bytes);
   SET_VARSIZE(dna, sizeof(DNA) + num_bytes);
   dna->overflow=(dna_length - ((num_bytes - 1) * 4)) % 4;
