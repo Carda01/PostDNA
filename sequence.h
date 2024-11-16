@@ -5,11 +5,14 @@
 #include <stdint.h>
 #include "postgres.h"
 #include "fmgr.h"
+#include "libpq/pqformat.h"
+#include "utils/fmgrprotos.h"
 
 #define BASE_MASK 0x3 // Binary: 11.
 
 #define QUERY_MASK 0xF // Binary: 1111.
 
+// extern int globalQkmerFlag; 
 
 // Binary codes assigned to each DNA base.
 enum {
@@ -44,21 +47,21 @@ typedef struct {
     uint8_t data[FLEXIBLE_ARRAY_MEMBER];
 } sequence;
 
-typedef struct {
-    int32 struct_size;
-    uint8_t overflow;
-    uint8_t data[FLEXIBLE_ARRAY_MEMBER];
-} DNA;
+// typedef struct {
+//     int32 struct_size;
+//     uint8_t overflow;
+//     uint8_t data[FLEXIBLE_ARRAY_MEMBER];
+// } DNA;
 
-typedef struct {
-    uint8_t k;
-    uint8_t *data;
-} KMER;
+// typedef struct {
+//     uint8_t k;
+//     uint8_t *data;
+// } KMER;
 
-typedef struct {
-    uint8_t k;
-    uint8_t *data;
-} QKMER;
+// typedef struct {
+//     uint8_t k;
+//     uint8_t *data;
+// } QKMER;
 
 
 void seq_print_binary(const uint8_t value);

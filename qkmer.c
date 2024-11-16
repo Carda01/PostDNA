@@ -1,38 +1,75 @@
 #include "qkmer.h"
+#include "sequence.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 
-uint8_t qkmer_get_length(QKMER qkmer)
-{
-return qkmer.k;
+
+// TODO add condition on length < 32
+PG_FUNCTION_INFO_V1(qkmer_in);
+Datum qkmer_in (PG_FUNCTION_ARGS) {
+    // globalQkmerFlag = 2;
+    char *str = PG_GETARG_CSTRING(0);
+    sequence* seq = qkmer_string_to_sequence(str);
+    PG_RETURN_SEQ_P(seq);
+}
+
+PG_FUNCTION_INFO_V1(qkmer_out);
+Datum qkmer_out(PG_FUNCTION_ARGS) {
+    // globalQkmerFlag = 2;
+    sequence *seq = PG_GETARG_SEQ_P(0);
+    char *result = qkmer_sequence_to_string(seq);
+    PG_FREE_IF_COPY(seq, 0);
+    PG_RETURN_CSTRING(result);
+}
+
+// TODO add condition on length < 32
+PG_FUNCTION_INFO_V1(qkmer_cast_from_text);
+Datum qkmer_cast_from_text(PG_FUNCTION_ARGS) {
+    // globalQkmerFlag = 2;
+    text *txt = PG_GETARG_TEXT_P(0);
+    char *str = DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(txt))); //MacOS
+    // char *str = text_to_cstring(txt);
+    PG_RETURN_SEQ_P(qkmer_string_to_sequence(&str));
+}
+
+PG_FUNCTION_INFO_V1(qkmer_cast_to_text);
+Datum qkmer_cast_to_text(PG_FUNCTION_ARGS) {
+    // globalQkmerFlag = 2;
+    sequence *seq = PG_GETARG_SEQ_P(0);
+    text *out = (text *)DirectFunctionCall1(textin, PointerGetDatum(qkmer_sequence_to_string(seq))); //MacOS
+    // text *out = cstring_to_text(seq_sequence_to_string(seq));
+    PG_FREE_IF_COPY(seq, 0);
+    PG_RETURN_TEXT_P(out);
 }
 
 
-QKMER qkmer_string_to_QKMER(const char *qkmer_str)
+sequence *qkmer_string_to_sequence(const char *qkmer_str)
 {
-  QKMER qkmer;
-  size_t str_len = strlen(qkmer_str);
-  if (str_len > 32) {
-    printf("Invalid size for qkmer (it can't be greater than 32)\n");
-    qkmer.k = -1;
-    return qkmer;
-  }
-  qkmer.k = strlen(qkmer_str);
-  qkmer.data = qkmer_encode(qkmer_str, qkmer.k);
-  return qkmer;
+
+    const size_t seq_length = strlen(qkmer_str);
+    size_t num_bytes;
+    uint8_t* data = qkmer_encode(qkmer_str, seq_length, &num_bytes);
+
+    sequence *seq = (sequence *) palloc(sizeof(sequence) + num_bytes);
+    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
+    seq->overflow = seq_length % 2;
+    memcpy(seq->data, data, num_bytes);
+
+    free(data);
+    return seq;
 
 }
 
-uint8_t *qkmer_encode(const char *qkmer_str, uint8_t k)
+uint8_t *qkmer_encode(const char *qkmer_str, const size_t sequence_len, size_t *data_bytes)
 {
 
-  const size_t data_bytes = (k / 2) + (k % 2 != 0); // 1 byte = 2 letters
-  uint8_t *data = malloc(sizeof(uint8_t) * data_bytes);
-  memset(data, 0, data_bytes);
+  *data_bytes = (sequence_len / 2) + (sequence_len % 2 != 0); // 1 byte = 2 letters
+  uint8_t *data = (uint8_t *) malloc(sizeof(uint8_t) * (*data_bytes));
+  memset(data, 0, (*data_bytes));
 
-  for (size_t i = 0; i < k; ++i) {
+  for (size_t i = 0; i < sequence_len; ++i) {
     uint8_t shift = 4 - 4 * (i % 2);
 
     switch (qkmer_str[i]) {
@@ -82,21 +119,24 @@ uint8_t *qkmer_encode(const char *qkmer_str, uint8_t k)
       data[i / 2] |= BASE_N << shift;
       break;
     default:
-      printf("Invalid Query Symbol");
-    }
-    // com_print_binary(data[i / 2]);
+      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("Invalid QKmer Symbol: character number %d is '%c' which is not a valid Query Symbol", i, qkmer_str[i])));    }
   }
   return data;
 }
 
 
-
-char *qkmer_decode(uint8_t *qkmer_seq, uint8_t k)
+char *qkmer_sequence_to_string(sequence *qkmer_seq)
 {
+  return qkmer_decode(qkmer_seq->data, qkmer_get_length(qkmer_seq));
 
-char *sequence = malloc(sizeof(char) * (k + 1));
+}
 
-  for (size_t i = 0; i < k; ++i) {
+char *qkmer_decode(uint8_t* qkmer_seq, size_t sequence_len)
+{
+char *sequence = palloc(sizeof(char) * (sequence_len + 1));
+
+  for (size_t i = 0; i < sequence_len; ++i) {
     uint8_t shift = 4 - 4 * (i % 2);
     uint8_t mask = QUERY_MASK << shift;
 
@@ -150,98 +190,100 @@ char *sequence = malloc(sizeof(char) * (k + 1));
       sequence[i] = 'N';
       break;
     default:
-      printf("Invalid Query Symbol");
+      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("Invalid QKmer Symbol: character number %d is not valid!"), i));    
     }
   }
 
-  sequence[k] = '\0';
+  sequence[sequence_len] = '\0';
   return sequence;
 }
 
 
-char *qkmer_QKMER_to_string(QKMER qkmer)
+
+uint8_t qkmer_get_length(sequence* qkmer_seq)
 {
-  return qkmer_decode(qkmer.data, qkmer.k);
-
-}
-
-
-bool qkmer_contains(QKMER qkmer, KMER kmer)
-{
-
-if (qkmer.k != kmer.k)
-{
-    printf("Lengths not equal!\n");
-    return 0;
-}
-
-uint8_t len = qkmer.k;
-
-for (size_t i=0; i<len; ++i)
-{
-// Get the i-th query symbol.
-    uint8_t shift = 4 - 4 * (i % 2);
-    uint8_t mask = QUERY_MASK << shift;
-    uint8_t symbol = (qkmer.data[i / 2] & mask) >> shift;
-
-// Get the i-th kmer base.
-    uint8_t shift2 = 6 - 2 * (i % 4);
-    uint8_t mask2 = BASE_MASK << shift2;
-    uint8_t base = (kmer.data[i / 4] & mask2) >> shift2;
-
-if (symbol == BASE_N) // N matches to all bases
-    {continue;}
-
-if ((symbol>>2 & BASE_MASK) == 0) // if it's a base symbol (A,C,G,T)
-    {
-        if (symbol != base)
-            {   
-                printf("No match at position %i\n",i);
-                return 0;
-            }
-        else
-            {continue;}
-    }
-
-if ( !match_Qsymbol (symbol, base) ) 
-    {
-        printf("No match at position %i\n",i);
-        return 0;
-    }
-
-}
-
-return 1;
-
+  return (VARSIZE(qkmer_seq) - sizeof(sequence) - 1) * 2 + (qkmer_seq->overflow == 0 ? 2 : qkmer_seq->overflow);
 }
 
 
 
-bool match_Qsymbol (uint8_t symbol, uint8_t kmer_base)
-{
+// bool qkmer_contains(sequence qkmer, sequence kmer)
+// {
 
-switch(symbol){
-    case(BASE_R):
-        return (kmer_base==BASE_A | kmer_base==BASE_G );
-    case(BASE_Y):
-        return (kmer_base==BASE_C | kmer_base==BASE_T );
-    case(BASE_S):
-        return (kmer_base==BASE_G | kmer_base==BASE_C );
-    case(BASE_W):
-        return (kmer_base==BASE_A | kmer_base==BASE_T );
-    case(BASE_K):
-        return (kmer_base==BASE_G | kmer_base==BASE_T );
-    case(BASE_M):
-        return (kmer_base==BASE_A | kmer_base==BASE_C );
-    case(BASE_B):
-        return (kmer_base != BASE_A );
-    case(BASE_D):
-        return (kmer_base != BASE_C );
-    case(BASE_H):
-        return (kmer_base != BASE_G );
-    case(BASE_V):
-        return (kmer_base != BASE_T );    
-    default: return 0; 
-}
+// if (qkmer.k != kmer.k)
+// {
+//     printf("Lengths not equal!\n");
+//     return 0;
+// }
 
-}
+// uint8_t len = qkmer.k;
+
+// for (size_t i=0; i<len; ++i)
+// {
+// // Get the i-th query symbol.
+//     uint8_t shift = 4 - 4 * (i % 2);
+//     uint8_t mask = QUERY_MASK << shift;
+//     uint8_t symbol = (qkmer.data[i / 2] & mask) >> shift;
+
+// // Get the i-th kmer base.
+//     uint8_t shift2 = 6 - 2 * (i % 4);
+//     uint8_t mask2 = BASE_MASK << shift2;
+//     uint8_t base = (kmer.data[i / 4] & mask2) >> shift2;
+
+// if (symbol == BASE_N) // N matches to all bases
+//     {continue;}
+
+// if ((symbol>>2 & BASE_MASK) == 0) // if it's a base symbol (A,C,G,T)
+//     {
+//         if (symbol != base)
+//             {   
+//                 printf("No match at position %i\n",i);
+//                 return 0;
+//             }
+//         else
+//             {continue;}
+//     }
+
+// if ( !match_Qsymbol (symbol, base) ) 
+//     {
+//         printf("No match at position %i\n",i);
+//         return 0;
+//     }
+
+// }
+
+// return 1;
+
+// }
+
+
+
+// bool match_Qsymbol (uint8_t symbol, uint8_t kmer_base)
+// {
+
+// switch(symbol){
+//     case(BASE_R):
+//         return (kmer_base==BASE_A | kmer_base==BASE_G );
+//     case(BASE_Y):
+//         return (kmer_base==BASE_C | kmer_base==BASE_T );
+//     case(BASE_S):
+//         return (kmer_base==BASE_G | kmer_base==BASE_C );
+//     case(BASE_W):
+//         return (kmer_base==BASE_A | kmer_base==BASE_T );
+//     case(BASE_K):
+//         return (kmer_base==BASE_G | kmer_base==BASE_T );
+//     case(BASE_M):
+//         return (kmer_base==BASE_A | kmer_base==BASE_C );
+//     case(BASE_B):
+//         return (kmer_base != BASE_A );
+//     case(BASE_D):
+//         return (kmer_base != BASE_C );
+//     case(BASE_H):
+//         return (kmer_base != BASE_G );
+//     case(BASE_V):
+//         return (kmer_base != BASE_T );    
+//     default: return 0; 
+// }
+
+// }

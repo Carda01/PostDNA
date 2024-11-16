@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
+// int globalQkmerFlag = 0;
+
 sequence* seq_string_to_sequence(const char *seq_str) {
     const size_t seq_length = strlen(seq_str);
     size_t num_bytes;
