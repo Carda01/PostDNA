@@ -5,18 +5,19 @@
 #include <string.h>
 
 
-size_t dna_get_length(DNA dna) { return dna.length; }
+size_t dna_get_length(DNA* dna) { return com_get_length(dna); }
 
 DNA* dna_string_to_DNA(const char *dna_str) {
   const size_t dna_length = strlen(dna_str);
   const size_t num_bytes = com_get_number_of_bytes(dna_length);
-  uint8_t* data = malloc(num_bytes);
-  com_encode2(dna_str, data, dna_length);
 
+  uint8_t* data = malloc(num_bytes);
+  memset(data, 0, num_bytes);
+
+  com_encode2(dna_str, data, dna_length);
   DNA *dna = (DNA *) palloc(sizeof(DNA) + num_bytes);
-  //dna->length = dna_length;
   SET_VARSIZE(dna, sizeof(DNA) + num_bytes);
-  dna->length=dna_length;
+  dna->overflow=(dna_length - ((num_bytes - 1) * 4)) % 4;
   memcpy(dna->data, data, num_bytes);
 
   free(data);
@@ -24,16 +25,16 @@ DNA* dna_string_to_DNA(const char *dna_str) {
 }
 
 char *dna_DNA_to_string(DNA *dna) { 
-    return com_decode(dna->data, dna->length);
+    return com_decode(dna->data, com_get_length(dna));
 }
 
-bool dna_equals(DNA dna1, DNA dna2) {
-  if (dna1.length != dna2.length) {
+bool dna_equals(DNA* dna1, DNA* dna2) {
+  if (com_get_length(dna1) != com_get_length(dna2)) {
     return false;
   }
 
-  for (size_t i = 0; i < dna1.length; ++i) {
-    if (dna1.data[i] != dna2.data[i]) {
+  for (size_t i = 0; i < com_get_length(dna1); ++i) {
+    if (dna1->data[i] != dna2->data[i]) {
       return false;
     }
   }
@@ -41,13 +42,13 @@ bool dna_equals(DNA dna1, DNA dna2) {
   return true;
 }
 
-KMER *dna_generate_kmers(DNA dna, uint8_t k) {
+KMER *dna_generate_kmers(DNA* dna, uint8_t k) {
   if (k > 32) {
     printf("Invalid k size (>32)");
     return NULL;
   }
 
-  const size_t num_kmers = com_get_num_generable_kmers(dna.length, k);
+  const size_t num_kmers = com_get_num_generable_kmers(com_get_length(dna), k);
   const uint8_t data_bytes = com_get_number_of_bytes(k);
   KMER *kmers = malloc(sizeof(KMER) * num_kmers);
   for (size_t i = 0; i < num_kmers; ++i) {
@@ -58,10 +59,10 @@ KMER *dna_generate_kmers(DNA dna, uint8_t k) {
     uint8_t init_pos = (2 * i) % 8;
     uint8_t step = 2 * k - 1;
     for (size_t c = 0; c < data_bytes; ++c) {
-      kmer.data[c] = dna.data[c + init_byte];
+      kmer.data[c] = dna->data[c + init_byte];
       kmer.data[c] <<= init_pos;
       if ((init_pos + step) / 8 != c) {
-        kmer.data[c] |= dna.data[c + init_byte + 1] >> (8 - init_pos);
+        kmer.data[c] |= dna->data[c + init_byte + 1] >> (8 - init_pos);
       }
     }
     kmers[i] = kmer;

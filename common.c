@@ -6,6 +6,10 @@ size_t com_get_number_of_bytes(size_t dna_len) {
   return (dna_len / 4) + (dna_len % 4 != 0);
 }
 
+size_t com_get_length(DNA* dna){
+  return (VARSIZE(dna) - sizeof(DNA) - 1) * 4 + (dna->overflow == 0 ? 4 : dna->overflow);
+}
+
 void com_print_binary(const uint8_t value) {
   for (int i = 7; i >= 0; i--) {
     printf("%d", (value >> i) & 1);
@@ -19,7 +23,7 @@ void com_encode2(const char *seq_str, uint8_t* data, const size_t sequence_len) 
   for (size_t i = 0; i < sequence_len; ++i) {
     uint8_t shift = 6 - 2 * (i % 4);
 
-    switch (seq_str[i]) {
+    switch (toupper(seq_str[i])) {
     case 'A':
       data[i / 4] |= BASE_A << shift;
       break;
@@ -33,7 +37,8 @@ void com_encode2(const char *seq_str, uint8_t* data, const size_t sequence_len) 
       data[i / 4] |= BASE_T << shift;
       break;
     default:
-      printf("Invalid DNA base");
+      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
     }
   }
 }
@@ -46,7 +51,7 @@ uint8_t *com_encode(const char *seq_str, const size_t sequence_len) {
   for (size_t i = 0; i < sequence_len; ++i) {
     uint8_t shift = 6 - 2 * (i % 4);
 
-    switch (seq_str[i]) {
+    switch (toupper(seq_str[i])) {
     case 'A':
       data[i / 4] |= BASE_A << shift;
       break;
@@ -60,7 +65,8 @@ uint8_t *com_encode(const char *seq_str, const size_t sequence_len) {
       data[i / 4] |= BASE_T << shift;
       break;
     default:
-      printf("Invalid DNA base");
+      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
     }
   }
   return data;
@@ -91,7 +97,8 @@ char* com_decode(uint8_t* data, size_t sequence_len){
       sequence[i] = 'T';
       break;
     default:
-      printf("Invalid DNA base");
+      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("Decode failed, character number %d is corrupted"), i));
     }
   }
 
@@ -103,3 +110,4 @@ char* com_decode(uint8_t* data, size_t sequence_len){
 size_t com_get_num_generable_kmers(size_t dna_len, uint8_t k){
   return dna_len - k + 1;
 }
+

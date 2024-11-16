@@ -1,0 +1,3 @@
+DNA ENCODING IDEA: https://dassencio.org/49
+POSTGRES EXTENSION DOCS: https://www.postgresql.org/docs/current/xfunc-c.html
+DEBUGGING: https://stackoverflow.com/questions/61361978/how-to-debug-postgres-extension

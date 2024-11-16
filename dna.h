@@ -12,12 +12,12 @@
 #define PG_RETURN_DNA_P(x) return DNAPGetDatum(x)
 
 
-size_t dna_get_length(DNA dna);
+size_t dna_get_length(DNA* dna);
 DNA *dna_string_to_DNA(const char *dna_str);
 char *dna_DNA_to_string(DNA* dna);
-bool dna_equals(DNA sequence1, DNA sequence2);
+bool dna_equals(DNA* sequence1, DNA* sequence2);
 
-KMER* dna_generate_kmers(DNA dna, uint8_t k);
+KMER* dna_generate_kmers(DNA* dna, uint8_t k);
 
 /*****************************************************************************/
 
