@@ -2,15 +2,38 @@
 #include <stdio.h>
 #include <string.h>
 
-size_t seq_get_number_of_bytes(size_t dna_len) {
-  return (dna_len / 4) + (dna_len % 4 != 0);
+sequence* seq_string_to_sequence(const char *seq_str) {
+    const size_t seq_length = strlen(seq_str);
+    size_t num_bytes;
+    uint8_t* data = seq_encode(seq_str, seq_length, &num_bytes);
+
+    sequence *seq = (sequence *) palloc(sizeof(sequence) + num_bytes);
+    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
+    seq->overflow = (seq_length - ((num_bytes - 1) * 4)) % 4;
+    memcpy(seq->data, data, num_bytes);
+
+    free(data);
+    return seq;
 }
 
-size_t seq_get_length(DNA* dna){
-  return (VARSIZE(dna) - sizeof(DNA) - 1) * 4 + (dna->overflow == 0 ? 4 : dna->overflow);
+char *seq_sequence_to_string(sequence *seq) {
+    return seq_decode(seq->data, seq_get_length(seq));
 }
 
-void com_print_binary(const uint8_t value) {
+size_t seq_get_number_of_bytes(size_t seq_len) {
+  return (seq_len / 4) + (seq_len % 4 != 0);
+}
+
+size_t seq_get_length(sequence* seq){
+  return (VARSIZE(seq) - sizeof(sequence) - 1) * 4 + (seq->overflow == 0 ? 4 : seq->overflow);
+}
+
+uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes) {
+    return (seq_length - ((num_bytes - 1) * 4)) % 4;
+}
+
+// TODO helper used in debug, allow it to work with elog
+void seq_print_binary(const uint8_t value) {
   for (int i = 7; i >= 0; i--) {
     printf("%d", (value >> i) & 1);
   }
@@ -82,7 +105,50 @@ char* seq_decode(uint8_t* data, size_t sequence_len){
 }
 
 
-size_t seq_get_num_generable_kmers(size_t dna_len, uint8_t k){
-  return dna_len - k + 1;
+size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k){
+  return seq_len - k + 1;
 }
 
+bool seq_equals(sequence* seq1, sequence* seq2) {
+    if (seq_get_length(seq1) != seq_get_length(seq2)) {
+        return false;
+    }
+
+    for (size_t i = 0; i < seq_get_length(seq1); ++i) {
+        if (seq1->data[i] != seq2->data[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// TODO rework it to generate variable-length kmers
+//sequence *seq_generate_kmers(sequence* seq, uint8_t k) {
+//    if (k > 32) {
+//        printf("Invalid k size (>32)");
+//        return NULL;
+//    }
+//
+//    const size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(seq), k);
+//    const uint8_t data_bytes = seq_get_number_of_bytes(k);
+//    sequence *kmers = malloc(sizeof(sequence) * num_kmers);
+//    for (size_t i = 0; i < num_kmers; ++i) {
+//        sequence kmer;
+//        kmer.k = k;
+//        kmer.data = malloc(sizeof(uint8_t) * data_bytes);
+//        size_t init_byte = (2 * i) / 8;
+//        uint8_t init_pos = (2 * i) % 8;
+//        uint8_t step = 2 * k - 1;
+//        for (size_t c = 0; c < data_bytes; ++c) {
+//            kmer.data[c] = seq->data[c + init_byte];
+//            kmer.data[c] <<= init_pos;
+//            if ((init_pos + step) / 8 != c) {
+//                kmer.data[c] |= seq->data[c + init_byte + 1] >> (8 - init_pos);
+//            }
+//        }
+//        kmers[i] = kmer;
+//    }
+//
+//    return kmers;
+//}

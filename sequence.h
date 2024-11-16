@@ -33,6 +33,11 @@ enum {
   BASE_N = 0xE, // Binary: 1110, A, C, G, or T (any base)
 };
 
+#define DatumGetSEQP(X)  ((sequence *) DatumGetPointer(X))
+#define SEQPGetDatum(X)  PointerGetDatum(X)
+#define PG_GETARG_SEQ_P(n) DatumGetSEQP(PG_GETARG_DATUM(n))
+#define PG_RETURN_SEQ_P(x) return SEQPGetDatum(x)
+
 typedef struct {
     int32 struct_size;
     uint8_t overflow;
@@ -44,7 +49,6 @@ typedef struct {
     uint8_t overflow;
     uint8_t data[FLEXIBLE_ARRAY_MEMBER];
 } DNA;
-
 
 typedef struct {
     uint8_t k;
@@ -58,11 +62,21 @@ typedef struct {
 
 
 void seq_print_binary(const uint8_t value);
-size_t seq_get_number_of_bytes(size_t dna_len);
-uint8_t* seq_encode(const char *sequence, const size_t sequence_len, size_t *data_bytes);
+
+sequence* seq_string_to_sequence(const char *seq_str);
+char *seq_sequence_to_string(sequence *seq);
+
+uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes);
 char* seq_decode(uint8_t* data, size_t sequence_len);
 
-size_t seq_get_length(DNA* dna);
-size_t seq_get_num_generable_kmers(size_t dna_len, uint8_t k);
+size_t seq_get_number_of_bytes(size_t seq_len);
+size_t seq_get_length(sequence* seq);
+uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes);
+
+size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);
+
+bool seq_equals(sequence* seq1, sequence* seq2);
+
+sequence* seq_generate_kmers(sequence* seq, uint8_t k);
 
 #endif
