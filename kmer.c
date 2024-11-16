@@ -10,19 +10,20 @@ uint8_t kmer_get_length(KMER kmer) { return kmer.k; }
 KMER kmer_string_to_KMER(const char *kmer_str) {
   KMER kmer;
   size_t str_len = strlen(kmer_str);
+  size_t num_bytes;
   if (str_len > 32) {
     printf("Invalid size for kmer (it can't be greater than 32)\n");
     kmer.k = -1;
     return kmer;
   }
   kmer.k = strlen(kmer_str);
-  kmer.data = com_encode(kmer_str, kmer.k);
+  kmer.data = seq_encode(kmer_str, kmer.k, &num_bytes);
   return kmer;
 }
 
 
 char *kmer_KMER_to_string(KMER kmer) {
-  return com_decode(kmer.data, kmer.k);
+  return seq_decode(kmer.data, kmer.k);
 }
 
 

@@ -1,5 +1,5 @@
 #include "dna.h"
-#include "common.h"
+#include "sequence.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,7 +10,7 @@ size_t dna_get_length(DNA* dna) { return com_get_length(dna); }
 DNA* dna_string_to_DNA(const char *dna_str) {
   const size_t dna_length = strlen(dna_str);
   size_t num_bytes;
-  uint8_t* data = com_encode(dna_str, dna_length, &num_bytes);
+  uint8_t* data = seq_encode(dna_str, dna_length, &num_bytes);
 
   DNA *dna = (DNA *) palloc(sizeof(DNA) + num_bytes);
   SET_VARSIZE(dna, sizeof(DNA) + num_bytes);
@@ -22,7 +22,7 @@ DNA* dna_string_to_DNA(const char *dna_str) {
 }
 
 char *dna_DNA_to_string(DNA *dna) { 
-    return com_decode(dna->data, com_get_length(dna));
+    return seq_decode(dna->data, com_get_length(dna));
 }
 
 bool dna_equals(DNA* dna1, DNA* dna2) {
@@ -45,8 +45,8 @@ KMER *dna_generate_kmers(DNA* dna, uint8_t k) {
     return NULL;
   }
 
-  const size_t num_kmers = com_get_num_generable_kmers(com_get_length(dna), k);
-  const uint8_t data_bytes = com_get_number_of_bytes(k);
+  const size_t num_kmers = seq_get_num_generable_kmers(com_get_length(dna), k);
+  const uint8_t data_bytes = seq_get_number_of_bytes(k);
   KMER *kmers = malloc(sizeof(KMER) * num_kmers);
   for (size_t i = 0; i < num_kmers; ++i) {
     KMER kmer;

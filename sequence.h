@@ -33,6 +33,11 @@ enum {
   BASE_N = 0xE, // Binary: 1110, A, C, G, or T (any base)
 };
 
+typedef struct {
+    int32 struct_size;
+    uint8_t overflow;
+    uint8_t data[FLEXIBLE_ARRAY_MEMBER];
+} sequence;
 
 typedef struct {
     int32 struct_size;
@@ -52,12 +57,12 @@ typedef struct {
 } QKMER;
 
 
-void com_print_binary(const uint8_t value);
-size_t com_get_number_of_bytes(size_t dna_len);
-uint8_t* com_encode(const char *sequence, const size_t sequence_len, size_t *data_bytes);
-char* com_decode(uint8_t* data, size_t sequence_len);
+void seq_print_binary(const uint8_t value);
+size_t seq_get_number_of_bytes(size_t dna_len);
+uint8_t* seq_encode(const char *sequence, const size_t sequence_len, size_t *data_bytes);
+char* seq_decode(uint8_t* data, size_t sequence_len);
 
-size_t com_get_length(DNA* dna);
-size_t com_get_num_generable_kmers(size_t dna_len, uint8_t k);
+size_t seq_get_length(DNA* dna);
+size_t seq_get_num_generable_kmers(size_t dna_len, uint8_t k);
 
 #endif

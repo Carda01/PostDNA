@@ -1,4 +1,4 @@
-#include "common.h"
+#include "sequence.h"
 #include "dna.h"
 #include "kmer.h"
 #include "qkmer.h"

@@ -1,12 +1,12 @@
-#include "common.h"
+#include "sequence.h"
 #include <stdio.h>
 #include <string.h>
 
-size_t com_get_number_of_bytes(size_t dna_len) {
+size_t seq_get_number_of_bytes(size_t dna_len) {
   return (dna_len / 4) + (dna_len % 4 != 0);
 }
 
-size_t com_get_length(DNA* dna){
+size_t seq_get_length(DNA* dna){
   return (VARSIZE(dna) - sizeof(DNA) - 1) * 4 + (dna->overflow == 0 ? 4 : dna->overflow);
 }
 
@@ -18,8 +18,8 @@ void com_print_binary(const uint8_t value) {
 }
 
 
-uint8_t *com_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes) {
-  *data_bytes = com_get_number_of_bytes(sequence_len);
+uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes) {
+  *data_bytes = seq_get_number_of_bytes(sequence_len);
   uint8_t *data = (uint8_t *) malloc(sizeof(uint8_t) * (*data_bytes));
   memset(data,0,(*data_bytes));
 
@@ -48,7 +48,7 @@ uint8_t *com_encode(const char *seq_str, const size_t sequence_len, size_t *data
 }
 
 
-char* com_decode(uint8_t* data, size_t sequence_len){
+char* seq_decode(uint8_t* data, size_t sequence_len){
   char *sequence = palloc(sizeof(char) * (sequence_len + 1));
 
   for (size_t i = 0; i < sequence_len; ++i) {
@@ -82,7 +82,7 @@ char* com_decode(uint8_t* data, size_t sequence_len){
 }
 
 
-size_t com_get_num_generable_kmers(size_t dna_len, uint8_t k){
+size_t seq_get_num_generable_kmers(size_t dna_len, uint8_t k){
   return dna_len - k + 1;
 }
 

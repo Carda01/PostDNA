@@ -1,7 +1,7 @@
 #ifndef KMER_H
 #define KMER_H
 
-#include "common.h"
+#include "sequence.h"
 #include <stdint.h>
 #include <stdbool.h>
 

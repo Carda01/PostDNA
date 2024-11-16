@@ -1,7 +1,7 @@
 #ifndef QKMER_H
 #define QKMER_H
 
-#include "common.h"
+#include "sequence.h"
 #include <stdint.h>
 #include <stdbool.h>
 

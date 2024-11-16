@@ -1,7 +1,7 @@
 #ifndef DNA_H
 #define DNA_H
 
-#include "common.h"
+#include "sequence.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
