@@ -1,6 +1,8 @@
 #include "sequence.h"
 #include <stdio.h>
 #include <string.h>
+#include "funcapi.h"
+#include "catalog/pg_type.h"
 
 int globalQkmerFlag = 0;
 
@@ -69,7 +71,7 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
       break;
     default:
       if(globalQkmerFlag == 2){
-        switch (seq_str[i]) {
+        switch (toupper(seq_str[i])) {
         case 'R':
           data[byte_index] |= BASE_R << shift;
           break;
@@ -238,3 +240,180 @@ bool seq_equals(sequence* seq1, sequence* seq2) {
 //
 //    return kmers;
 //}
+
+
+
+
+// /* Structure to store function state */
+// typedef struct {
+//     sequence *seq;        /* Input sequence */
+//     uint8_t k;            /* Length of the k-mer */
+//     size_t current_index; /* Current index of the k-mer */
+//     size_t num_kmers;     /* Total number of k-mers */
+//     uint8_t data_bytes;   /* Number of bytes needed for each k-mer */
+// } KmerState2;
+
+
+// PG_FUNCTION_INFO_V1(generate_kmers);
+// Datum generate_kmers(PG_FUNCTION_ARGS)
+// {
+//     globalQkmerFlag = 1;
+//     char *str = PG_GETARG_CSTRING(0);
+//     uint8_t k = PG_GETARG_INT32(1);
+
+//     sequence* sequence = seq_string_to_sequence(str);
+
+//     const size_t num_kmers = seq_get_num_generable_kmers(strlen(str), k);
+//     const uint8_t data_bytes = seq_get_number_of_bytes(k);
+      
+//     sequence *kmers;
+//     FuncCallContext  *funcctx;
+    
+//     if (SRF_IS_FIRSTCALL())
+//     {
+//         MemoryContext oldcontext;
+
+//         funcctx = SRF_FIRSTCALL_INIT();
+//         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+//         /* One-time setup code appears here: */
+
+//         kmer = (sequence *) palloc(sizeof(sequence));
+
+//        size_t init_byte = 0;
+//        uint8_t init_pos = 0;
+//        uint8_t step = 2 * k - 1;
+//        for (size_t c = 0; c < data_bytes; ++c) {
+//            kmer.data[c] = seq->data[c + init_byte];
+//            kmer.data[c] <<= init_pos;
+//            if ((init_pos + step) / 8 != c) {
+//                kmer.data[c] |= seq->data[c + init_byte + 1] >> (8 - init_pos);
+//            }
+//        }
+
+//         /* Save the kmer in the function context */
+//         funcctx->user_fctx = kmer;
+//         funcctx->max_calls = num_kmers;
+
+//         /* Define the result tuple descriptor */
+//         TupleDesc tupdesc = CreateTemplateTupleDesc(1);
+//         TupleDescInitEntry(tupdesc, (AttrNumber) 1, "Kmer", TEXTOID, -1, 0);
+//         funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+
+//         MemoryContextSwitchTo(oldcontext);
+//     }
+
+//     /* Retrieve the function call context */
+//     funcctx = SRF_PERCALL_SETUP();
+//     call_cntr = funcctx->call_cntr;
+//     max_calls = funcctx->max_calls;
+//     kmer = (sequence *) funcctx->user_fctx;
+
+//     if (call_cntr < max_calls)  
+//     {
+
+//         HeapTuple    tuple;
+//         Datum        result;
+
+
+//     }
+
+//     /* No more results */
+//     SRF_RETURN_DONE(funcctx);
+
+// }
+
+
+
+
+/* Structure to store function state */
+typedef struct {
+    sequence *seq;        /* Input sequence */
+    uint8_t k;            /* Length of the k-mer */
+    size_t current_index; /* Current index of the k-mer */
+    size_t num_kmers;     /* Total number of k-mers */
+    uint8_t data_bytes;   /* Number of bytes needed for each k-mer */
+} KmerState;
+
+/* Function declaration */
+PG_FUNCTION_INFO_V1(generate_kmers);
+Datum generate_kmers(PG_FUNCTION_ARGS)
+{
+    FuncCallContext *funcctx;
+    KmerState *state;
+
+    /* On the first call, initialize the function context and state */
+    if (SRF_IS_FIRSTCALL()) {
+        /* Create a function call context for cross-call persistence */
+        funcctx = SRF_FIRSTCALL_INIT();
+
+        /* Switch to a memory context appropriate for multiple calls */
+        MemoryContext oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        /* Allocate and initialize function state */
+        state = (KmerState *) palloc(sizeof(KmerState));
+        funcctx->user_fctx = state;
+
+        /* Get the sequence and k-mer length from function arguments */
+        state->seq = (sequence *) PG_GETARG_POINTER(0);
+        state->k = PG_GETARG_UINT8(1);
+
+        /* Validate the k-mer length */
+        if (state->k > 32) {
+            ereport(ERROR,
+                    (errmsg("Invalid k size (>32)")));
+        }
+
+        /* Calculate the number of k-mers that can be generated */
+        state->num_kmers = seq_get_num_generable_kmers(seq_get_length(state->seq), state->k);
+        state->data_bytes = seq_get_number_of_bytes(state->k);
+
+        /* Initialize state for generating k-mers */
+        state->current_index = 0;
+
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    /* Retrieve the function context and state */
+    funcctx = SRF_PERCALL_SETUP();
+    state = (KmerState *) funcctx->user_fctx;
+
+    /* Generate the next k-mer */
+    if (state->current_index < state->num_kmers) {
+        /* Allocate memory for the current k-mer */
+        sequence kmer;
+        kmer.k = state->k;
+        kmer.data = (uint8_t *) palloc(sizeof(uint8_t) * state->data_bytes);
+
+        size_t init_byte = (2 * state->current_index) / 8;
+        uint8_t init_pos = (2 * state->current_index) % 8;
+        uint8_t step = 2 * state->k - 1;
+        for (size_t c = 0; c < state->data_bytes; ++c) {
+            kmer.data[c] = state->seq->data[c + init_byte];
+            kmer.data[c] <<= init_pos;
+            if ((init_pos + step) / 8 != c) {
+                kmer.data[c] |= state->seq->data[c + init_byte + 1] >> (8 - init_pos);
+            }
+        }
+
+        /* Prepare the result tuple */
+        Datum values[1];
+        bool nulls[1] = {false};
+        HeapTuple tuple;
+        Datum result;
+
+        values[0] = PointerGetDatum(&kmer);
+
+        /* Create the tuple and return it */
+        tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+        result = HeapTupleGetDatum(tuple);
+
+        /* Return the current k-mer */
+        SRF_RETURN_NEXT(funcctx, result);
+
+        /* Update state for the next k-mer */
+        state->current_index++;
+    }
+
+    /* No more k-mers */
+    SRF_RETURN_DONE(funcctx);
+}
