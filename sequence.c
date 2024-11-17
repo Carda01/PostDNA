@@ -68,7 +68,7 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
       data[byte_index] |= BASE_T << shift;
       break;
     default:
-      if(globalQkmerFlag == 2)
+      if(globalQkmerFlag == 2){
         switch (seq_str[i]) {
         case 'R':
           data[byte_index] |= BASE_R << shift;
@@ -107,10 +107,10 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
             errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
 
-        }
-      else
+        }}
+      else {
         ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-          errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
+          errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));}
     }
   }
   return data;
@@ -141,7 +141,7 @@ char* seq_decode(uint8_t* data, size_t sequence_len){
       sequence[i] = 'T';
       break;
     default:
-      if(globalQkmerFlag == 2)
+      if(globalQkmerFlag == 2){
         switch (base) {
         case BASE_R:
           sequence[i] = 'R';
@@ -179,10 +179,10 @@ char* seq_decode(uint8_t* data, size_t sequence_len){
         default:
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
             errmsg("Invalid QKmer Symbol: character number %d is not valid!"), i));    
-        }
-      else
+        }}
+      else{
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-            errmsg("Decode failed, character number %d is corrupted"), i));
+            errmsg("Decode failed, character number %d is corrupted"), i));}
     }
   }
 
