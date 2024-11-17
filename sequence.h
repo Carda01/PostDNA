@@ -12,7 +12,7 @@
 
 #define QUERY_MASK 0xF // Binary: 1111.
 
-// extern int globalQkmerFlag; 
+extern int globalQkmerFlag; 
 
 // Binary codes assigned to each DNA base.
 enum {
