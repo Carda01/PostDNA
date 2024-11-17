@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// int globalQkmerFlag = 0;
+int globalQkmerFlag = 0;
 
 sequence* seq_string_to_sequence(const char *seq_str) {
     const size_t seq_length = strlen(seq_str);
@@ -11,7 +11,9 @@ sequence* seq_string_to_sequence(const char *seq_str) {
 
     sequence *seq = (sequence *) palloc(sizeof(sequence) + num_bytes);
     SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
-    seq->overflow = (seq_length - ((num_bytes - 1) * 4)) % 4;
+    // seq->overflow = (seq_length - ((num_bytes - 1) * 4)) % 4;
+    seq->overflow = seq_length % (4/globalQkmerFlag);
+
     memcpy(seq->data, data, num_bytes);
 
     free(data);
@@ -23,11 +25,11 @@ char *seq_sequence_to_string(sequence *seq) {
 }
 
 size_t seq_get_number_of_bytes(size_t seq_len) {
-  return (seq_len / 4) + (seq_len % 4 != 0);
+  return (seq_len / (4/globalQkmerFlag)) + (seq_len % (4/globalQkmerFlag) != 0);
 }
 
 size_t seq_get_length(sequence* seq){
-  return (VARSIZE(seq) - sizeof(sequence) - 1) * 4 + (seq->overflow == 0 ? 4 : seq->overflow);
+  return (VARSIZE(seq) - sizeof(sequence) - 1) * (4/globalQkmerFlag) + (seq->overflow == 0 ? (4/globalQkmerFlag) : seq->overflow);
 }
 
 uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes) {
@@ -49,24 +51,66 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
   memset(data,0,(*data_bytes));
 
   for (size_t i = 0; i < sequence_len; ++i) {
-    uint8_t shift = 6 - 2 * (i % 4);
+    uint8_t shift = globalQkmerFlag == 2 ? 4 - 4 * (i % 2) : 6 - 2 * (i % 4);
+    uint8_t byte_index = i / (4/globalQkmerFlag);
 
     switch (toupper(seq_str[i])) {
     case 'A':
-      data[i / 4] |= BASE_A << shift;
+      data[byte_index] |= BASE_A << shift;
       break;
     case 'C':
-      data[i / 4] |= BASE_C << shift;
+      data[byte_index] |= BASE_C << shift;
       break;
     case 'G':
-      data[i / 4] |= BASE_G << shift;
+      data[byte_index] |= BASE_G << shift;
       break;
     case 'T':
-      data[i / 4] |= BASE_T << shift;
+      data[byte_index] |= BASE_T << shift;
       break;
     default:
-      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-        errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
+      if(globalQkmerFlag == 2)
+        switch (seq_str[i]) {
+        case 'R':
+          data[byte_index] |= BASE_R << shift;
+          break;
+        case 'Y':
+          data[byte_index] |= BASE_Y << shift;
+          break;
+        case 'S':
+          data[byte_index] |= BASE_S << shift;
+          break;
+        case 'W':
+          data[byte_index] |= BASE_W << shift;
+          break;
+        case 'K':
+          data[byte_index] |= BASE_K << shift;
+          break;
+        case 'M':
+          data[byte_index] |= BASE_M << shift;
+          break;
+        case 'B':
+          data[byte_index] |= BASE_B << shift;
+          break;
+        case 'D':
+          data[byte_index] |= BASE_D << shift;
+          break;
+        case 'H':
+          data[byte_index] |= BASE_H << shift;
+          break;
+        case 'V':
+          data[byte_index] |= BASE_V << shift;
+          break;
+        case 'N':
+          data[byte_index] |= BASE_N << shift;
+          break;
+        default:
+          ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+            errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
+
+        }
+      else
+        ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+          errmsg("Invalid DNA base: character number %d is '%c' which is not a valid DNA base", i, seq_str[i])));
     }
   }
   return data;
@@ -77,11 +121,11 @@ char* seq_decode(uint8_t* data, size_t sequence_len){
   char *sequence = palloc(sizeof(char) * (sequence_len + 1));
 
   for (size_t i = 0; i < sequence_len; ++i) {
-    uint8_t shift = 6 - 2 * (i % 4);
-    uint8_t mask = BASE_MASK << shift;
+    uint8_t shift = globalQkmerFlag == 2 ? 4 - 4 * (i % 2) : 6 - 2 * (i % 4);
+    uint8_t mask = globalQkmerFlag == 2 ? QUERY_MASK << shift : BASE_MASK << shift;
 
     // Get the i-th DNA base.
-    uint8_t base = (data[i / 4] & mask) >> shift;
+    uint8_t base = (data[i / (4/globalQkmerFlag)] & mask) >> shift;
 
     switch (base) {
     case BASE_A:
@@ -97,8 +141,48 @@ char* seq_decode(uint8_t* data, size_t sequence_len){
       sequence[i] = 'T';
       break;
     default:
-      ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-        errmsg("Decode failed, character number %d is corrupted"), i));
+      if(globalQkmerFlag == 2)
+        switch (base) {
+        case BASE_R:
+          sequence[i] = 'R';
+          break;
+        case BASE_Y:
+          sequence[i] = 'Y';
+          break;
+        case BASE_S:
+          sequence[i] = 'S';
+          break;
+        case BASE_W:
+          sequence[i] = 'W';
+          break;
+        case BASE_K:
+          sequence[i] = 'K';
+          break;
+        case BASE_M:
+          sequence[i] = 'M';
+          break;
+        case BASE_B:
+          sequence[i] = 'B';
+          break;
+        case BASE_D:
+          sequence[i] = 'D';
+          break;
+        case BASE_H:
+          sequence[i] = 'H';
+          break;
+        case BASE_V:
+          sequence[i] = 'V';
+          break;
+        case BASE_N:
+          sequence[i] = 'N';
+          break;
+        default:
+          ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+            errmsg("Invalid QKmer Symbol: character number %d is not valid!"), i));    
+        }
+      else
+          ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+            errmsg("Decode failed, character number %d is corrupted"), i));
     }
   }
 
