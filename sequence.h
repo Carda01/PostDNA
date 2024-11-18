@@ -63,6 +63,7 @@ typedef struct {
 //     uint8_t *data;
 // } QKMER;
 
+Datum generate_kmers(PG_FUNCTION_ARGS); 
 
 void seq_print_binary(const uint8_t value);
 
@@ -81,5 +82,7 @@ size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);
 bool seq_equals(sequence* seq1, sequence* seq2);
 
 sequence* seq_generate_kmers(sequence* seq, uint8_t k);
+
+
 
 #endif

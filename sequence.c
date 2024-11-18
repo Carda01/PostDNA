@@ -3,6 +3,7 @@
 #include <string.h>
 #include "funcapi.h"
 #include "catalog/pg_type.h"
+#include "funcapi.h"
 
 int globalQkmerFlag = 0;
 
@@ -120,7 +121,8 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
 
 
 char* seq_decode(uint8_t* data, size_t sequence_len){
-  char *sequence = palloc(sizeof(char) * (sequence_len + 1));
+
+  char *sequence = malloc(sizeof(char) * (sequence_len + 1));
 
   for (size_t i = 0; i < sequence_len; ++i) {
     uint8_t shift = globalQkmerFlag == 2 ? 4 - 4 * (i % 2) : 6 - 2 * (i % 4);
@@ -211,13 +213,13 @@ bool seq_equals(sequence* seq1, sequence* seq2) {
     return true;
 }
 
-// TODO rework it to generate variable-length kmers
-//sequence *seq_generate_kmers(sequence* seq, uint8_t k) {
+// // // TODO rework it to generate variable-length kmers
+// sequence *seq_generate_kmers(sequence* seq, uint8_t k) {
 //    if (k > 32) {
 //        printf("Invalid k size (>32)");
 //        return NULL;
 //    }
-//
+
 //    const size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(seq), k);
 //    const uint8_t data_bytes = seq_get_number_of_bytes(k);
 //    sequence *kmers = malloc(sizeof(sequence) * num_kmers);
@@ -237,6 +239,122 @@ bool seq_equals(sequence* seq1, sequence* seq2) {
 //        }
 //        kmers[i] = kmer;
 //    }
-//
+
 //    return kmers;
-//}
+// }
+
+
+
+PG_FUNCTION_INFO_V1(generate_kmers);
+Datum generate_kmers(PG_FUNCTION_ARGS)
+{
+    FuncCallContext     *funcctx; // context for all info we need accross calls
+    int                  call_cntr;
+    int                  max_calls;
+    TupleDesc            tupdesc; //////////// one type column not composite soo?
+    AttInMetadata        *attinmeta; //////////// 
+    sequence             *kmer;
+    // HeapTuple            tuple;
+    // bool *isnull;
+    // Datum  dat[1] ;
+
+
+    globalQkmerFlag = 1;
+    sequence *dna = PG_GETARG_SEQ_P(0); //the dna sequence
+    uint8_t k = PG_GETARG_INT32(1); // k (for generating k-mers)
+    size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(dna), k);
+    uint8_t data_bytes = seq_get_number_of_bytes(k);
+      
+    if (SRF_IS_FIRSTCALL())
+    {
+        MemoryContext oldcontext;
+        funcctx = SRF_FIRSTCALL_INIT(); // call_cntr is set to 0 + multi_call_memory_ctx is set (which is memory context for any memory that is to be reused across multiple calls of the SRF)
+
+        /* switch to memory context appropriate for multiple function calls */
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+        
+        /* total number of tuples to be returned */
+        funcctx->max_calls = num_kmers;
+
+        /* Build a tuple descriptor for our result type */
+        if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+            ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                     errmsg("function returning record called in context "
+                            "that cannot accept type record")));
+
+        // tupdesc = BlessTupleDesc(tupdesc);
+        attinmeta = TupleDescGetAttInMetadata(tupdesc); ////////////
+        funcctx->attinmeta = attinmeta; ////////////
+
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+      /* stuff done on every call of the function */
+    funcctx = SRF_PERCALL_SETUP();
+
+    call_cntr = funcctx->call_cntr;
+    max_calls = funcctx->max_calls;
+    attinmeta = funcctx->attinmeta; //////////
+
+    if (call_cntr < max_calls)    /* do when there is more left to send */
+    {
+        char       **values;
+        char       *temp;
+        HeapTuple    tuple;
+        Datum   result;  // to be returned at the end
+
+        kmer = (sequence *) palloc(sizeof(sequence) + data_bytes);
+
+       size_t init_byte = (2 * call_cntr) / 8;
+       uint8_t init_pos = (2 * call_cntr) % 8;
+       uint8_t step = 2 * k - 1;
+       for (size_t c = 0; c < data_bytes; ++c) {
+           kmer->data[c] = dna->data[c + init_byte];
+           kmer->data[c] <<= init_pos;
+           if ((init_pos + step) / 8 != c) {
+               kmer->data[c] |= dna->data[c + init_byte + 1] >> (8 - init_pos);
+           }
+       }
+
+
+         values = (char **) palloc(1 * sizeof(char *));
+         values[0] = (char *) palloc((k+1) * sizeof(char));
+
+         globalQkmerFlag = 1;
+
+         snprintf(values[0], k+1, "%s", seq_sequence_to_string(kmer));
+        /* build a tuple */
+        tuple = BuildTupleFromCStrings(attinmeta, values);
+        
+        //dat[0] = PointerGetDatum(kmer);
+        //dat[0] = PointerGetDatum(seq_sequence_to_string(kmer));
+        //tuple = heap_form_tuple(tupdesc, dat, isnull);
+
+        // if (isnull)
+        //     ereport(ERROR,
+        //             (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+        //              errmsg("Tuple is zero")));
+
+        /* make the tuple into a datum */
+        result = HeapTupleGetDatum(tuple);
+
+        /* clean up (this is not really necessary) */
+        // pfree(values[0]);
+        // pfree(values);
+        pfree(kmer);
+
+        SRF_RETURN_NEXT(funcctx, result);
+
+
+    }
+    else    /* do when there is no more left */
+    {
+        SRF_RETURN_DONE(funcctx);
+    }
+
+
+}
+
+
+

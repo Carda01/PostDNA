@@ -38,6 +38,7 @@ CREATE CAST (text as dna) WITH FUNCTION dna(text) AS IMPLICIT;
 CREATE CAST (dna as text) WITH FUNCTION text(dna);
 
 
+
 -- Kmer
 
 CREATE OR REPLACE FUNCTION kmer_in(cstring)
@@ -69,6 +70,14 @@ CREATE OR REPLACE FUNCTION text(kmer)
 
 CREATE CAST (text as kmer) WITH FUNCTION kmer(text) AS IMPLICIT;
 CREATE CAST (kmer as text) WITH FUNCTION text(kmer);
+
+
+CREATE TYPE composite AS (kmers kmer);
+
+CREATE OR REPLACE FUNCTION generate_kmers(dna, integer)
+    RETURNS SETOF composite
+    AS 'MODULE_PATHNAME', 'generate_kmers'
+    LANGUAGE C IMMUTABLE STRICT;
 
 -- QKmer
 
