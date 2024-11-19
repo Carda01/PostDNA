@@ -39,12 +39,14 @@ uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes) {
     return (seq_length - ((num_bytes - 1) * 4)) % 4;
 }
 
-// TODO helper used in debug, allow it to work with elog
-void seq_print_binary(const uint8_t value) {
+// Helper used in debug, remember to free memory
+char* seq_get_byte_binary_representation(const uint8_t value) {
+  char* binary_representation = malloc(9);
   for (int i = 7; i >= 0; i--) {
-    printf("%d", (value >> i) & 1);
+    binary_representation[7-i] = '0' + ((value >> i) & 1);
   }
-  printf("\n");
+  binary_representation[8] = '\0';
+  return binary_representation;
 }
 
 
@@ -213,7 +215,7 @@ bool seq_equals(sequence* seq1, sequence* seq2) {
     return true;
 }
 
-// // // TODO rework it to generate variable-length kmers
+// // TODO rework it to generate variable-length kmers
 // sequence *seq_generate_kmers(sequence* seq, uint8_t k) {
 //    if (k > 32) {
 //        printf("Invalid k size (>32)");

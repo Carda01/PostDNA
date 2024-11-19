@@ -65,7 +65,7 @@ typedef struct {
 
 Datum generate_kmers(PG_FUNCTION_ARGS); 
 
-void seq_print_binary(const uint8_t value);
+char* seq_get_byte_binary_representation(const uint8_t value);
 
 sequence* seq_string_to_sequence(const char *seq_str);
 char *seq_sequence_to_string(sequence *seq);
