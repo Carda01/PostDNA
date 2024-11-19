@@ -297,7 +297,7 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
 
         result = PointerGetDatum(kmer);
 
-        SRF_RETURN_NEXT(funcctx, PointerGetDatum(result));
+        SRF_RETURN_NEXT(funcctx, result);
 
     }
     else   
