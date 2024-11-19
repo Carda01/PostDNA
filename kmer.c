@@ -1,49 +1,36 @@
 #include "kmer.h"
+#include "sequence.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 
-
-uint8_t kmer_get_length(KMER kmer) { return kmer.k; }
-
-KMER kmer_string_to_KMER(const char *kmer_str) {
-  KMER kmer;
-  size_t str_len = strlen(kmer_str);
-  if (str_len > 32) {
-    printf("Invalid size for kmer (it can't be greater than 32)\n");
-    kmer.k = -1;
-    return kmer;
-  }
-  kmer.k = strlen(kmer_str);
-  kmer.data = com_encode(kmer_str, kmer.k);
-  return kmer;
+PG_FUNCTION_INFO_V1(kmer_in);
+Datum kmer_in(PG_FUNCTION_ARGS) {
+    char *str = PG_GETARG_CSTRING(0);
+    sequence* seq = seq_string_to_sequence(str, KMER);
+    PG_RETURN_SEQ_P(seq);
 }
 
-
-char *kmer_KMER_to_string(KMER kmer) {
-  return com_decode(kmer.data, kmer.k);
+PG_FUNCTION_INFO_V1(kmer_out);
+Datum kmer_out(PG_FUNCTION_ARGS) {
+    sequence *seq = PG_GETARG_SEQ_P(0);
+    char *result = seq_sequence_to_string(seq, KMER);
+    PG_FREE_IF_COPY(seq, 0);
+    PG_RETURN_CSTRING(result);
 }
 
-
-bool kmer_equals(KMER kmer1, KMER kmer2) {
-  if (kmer1.k != kmer2.k) {
-    return false;
-  }
-
-  for (size_t i = 0; i < kmer1.k; ++i) {
-    if (kmer1.data[i] != kmer2.data[i]) {
-      return false;
-    }
-  }
-
-  return true;
+PG_FUNCTION_INFO_V1(kmer_cast_from_text);
+Datum kmer_cast_from_text(PG_FUNCTION_ARGS) {
+    text *txt = PG_GETARG_TEXT_P(0);
+    char *str = DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(txt)));
+    PG_RETURN_SEQ_P(seq_string_to_sequence(&str, KMER));
 }
 
-void kmer_print_list_kmers(KMER *kmers, size_t num_kmers){
-  printf("\n");
-  for (size_t i = 0; i < num_kmers; ++i){
-    printf("%s\n", kmer_KMER_to_string(kmers[i]));
-  }
-  printf("\n");
+PG_FUNCTION_INFO_V1(kmer_cast_to_text);
+Datum kmer_cast_to_text(PG_FUNCTION_ARGS) {
+    sequence *seq = PG_GETARG_SEQ_P(0);
+    text *out = (text *)DirectFunctionCall1(textin, PointerGetDatum(seq_sequence_to_string(seq, KMER)));
+    PG_FREE_IF_COPY(seq, 0);
+    PG_RETURN_TEXT_P(out);
 }
