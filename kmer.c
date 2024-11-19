@@ -1,4 +1,5 @@
 #include "kmer.h"
+#include "sequence.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,8 +9,7 @@ PG_FUNCTION_INFO_V1(kmer_in);
 Datum kmer_in(PG_FUNCTION_ARGS) {
     globalQkmerFlag = 1;
     char *str = PG_GETARG_CSTRING(0);
-    if(strlen(str)>32){
-        ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("Kmer Length should be less than or equal 32.")));}
+    seq_kmer_check_length(str);
     sequence* seq = seq_string_to_sequence(str);
     PG_RETURN_SEQ_P(seq);
 }
@@ -28,8 +28,7 @@ Datum kmer_cast_from_text(PG_FUNCTION_ARGS) {
     globalQkmerFlag = 1;
     text *txt = PG_GETARG_TEXT_P(0);
     char *str = DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(txt)));
-    if(strlen(str)>32){
-        ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("Kmer Length should be less than or equal 32.")));}
+    seq_kmer_check_length(str);
     PG_RETURN_SEQ_P(seq_string_to_sequence(&str));
 }
 

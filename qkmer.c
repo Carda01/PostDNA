@@ -10,8 +10,8 @@ PG_FUNCTION_INFO_V1(qkmer_in);
 Datum qkmer_in (PG_FUNCTION_ARGS) {
     globalQkmerFlag = 2;
     char *str = PG_GETARG_CSTRING(0);
-    if(strlen(str)>32){
-        ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("QKmer Length should be less than or equal 32.")));}
+
+    seq_kmer_check_length(str);
     sequence* seq = seq_string_to_sequence(str);
     PG_RETURN_SEQ_P(seq);
 }
@@ -25,16 +25,16 @@ Datum qkmer_out(PG_FUNCTION_ARGS) {
     PG_RETURN_CSTRING(result);
 }
 
+
 PG_FUNCTION_INFO_V1(qkmer_cast_from_text);
 Datum qkmer_cast_from_text(PG_FUNCTION_ARGS) {
     globalQkmerFlag = 2;
     text *txt = PG_GETARG_TEXT_P(0);
     char *str = DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(txt)));
-    if(strlen(str)>32){
-        ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("QKmer Length should be less than or equal 32.")));}
+    seq_kmer_check_length(str);
     PG_RETURN_SEQ_P(seq_string_to_sequence(&str));
-
 }
+
 
 PG_FUNCTION_INFO_V1(qkmer_cast_to_text);
 Datum qkmer_cast_to_text(PG_FUNCTION_ARGS) {

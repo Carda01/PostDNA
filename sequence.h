@@ -36,6 +36,7 @@ enum {
   BASE_N = 0xE, // Binary: 1110, A, C, G, or T (any base)
 };
 
+
 #define DatumGetSEQP(X)  ((sequence *) DatumGetPointer(X))
 #define SEQPGetDatum(X)  PointerGetDatum(X)
 #define PG_GETARG_SEQ_P(n) DatumGetSEQP(PG_GETARG_DATUM(n))
@@ -46,6 +47,7 @@ typedef struct {
     uint8_t overflow;
     uint8_t data[FLEXIBLE_ARRAY_MEMBER];
 } sequence;
+
 
 // typedef struct {
 //     int32 struct_size;
@@ -80,9 +82,8 @@ uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes);
 size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);
 
 bool seq_equals(sequence* seq1, sequence* seq2);
+void seq_kmer_check_length(char* str);
 
 sequence* seq_generate_kmers(sequence* seq, uint8_t k);
-
-
 
 #endif

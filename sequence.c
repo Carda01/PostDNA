@@ -7,6 +7,11 @@
 
 int globalQkmerFlag = 0;
 
+void seq_kmer_check_length(char* str) {
+    if(strlen(str)>32){
+        ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("Kmer length should be less than or equal 32.")));}
+}
+
 sequence* seq_string_to_sequence(const char *seq_str) {
     const size_t seq_length = strlen(seq_str);
     size_t num_bytes;
@@ -36,7 +41,7 @@ size_t seq_get_length(sequence* seq){
 }
 
 uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes) {
-    return (seq_length - ((num_bytes - 1) * 4)) % 4;
+    return seq_length % 4;
 }
 
 // Helper used in debug, remember to free memory
