@@ -34,12 +34,13 @@ enum {
   BASE_N = 0xE, // Binary: 1110, A, C, G, or T (any base)
 };
 
-
 enum {
   DNA = 0,
   KMER = 1,
   QKMER = 2,
 };
+
+#define KMER_MAX_SIZE 32
 
 
 #define DatumGetSEQP(X)  ((sequence *) DatumGetPointer(X))

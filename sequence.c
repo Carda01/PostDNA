@@ -16,7 +16,7 @@ inline char* seq_get_string_type(int type) {
 sequence* seq_string_to_sequence(const char *seq_str, int type) {
     const size_t seq_length = strlen(seq_str);
 
-    if(type != DNA && seq_length > 32){
+    if(type != DNA && seq_length > KMER_MAX_SIZE){
         ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("%s length should be less than or equal 32.", seq_get_string_type(type))));
     }
 
@@ -127,10 +127,12 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
             errmsg("Invalid QKMER base: character number %d is '%c' which is not a valid QKMER base", i, seq_str[i])));
 
-        }}
+        }
+      }
       else {
         ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-          errmsg("Invalid %s base: character number %d is '%c' which is not a valid base", seq_get_string_type(type), i, seq_str[i])));}
+          errmsg("Invalid %s base: character number %d is '%c' which is not a valid base", seq_get_string_type(type), i, seq_str[i])));
+      }
     }
   }
   return data;
@@ -202,10 +204,12 @@ char* seq_decode(uint8_t* data, size_t sequence_len, int type){
         default:
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
             errmsg("Decode failed for QKMER Symbol: character number %d is corrupted"), i));    
-        }}
+        }
+      }
       else{
           ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-            errmsg("Decode failed for %s symbol: character number %d is corrupted"), seq_get_string_type(type), i));}
+            errmsg("Decode failed for %s symbol: character number %d is corrupted"), seq_get_string_type(type), i));
+      }
     }
   }
 
