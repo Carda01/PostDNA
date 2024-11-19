@@ -72,12 +72,10 @@ CREATE CAST (text as kmer) WITH FUNCTION kmer(text) AS IMPLICIT;
 CREATE CAST (kmer as text) WITH FUNCTION text(kmer);
 
 
-CREATE TYPE composite AS (kmers kmer);
-
 CREATE OR REPLACE FUNCTION generate_kmers(dna, integer)
-    RETURNS SETOF composite
+    RETURNS SETOF kmer
     AS 'MODULE_PATHNAME', 'generate_kmers'
-    LANGUAGE C IMMUTABLE STRICT;
+    LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 -- QKmer
 
