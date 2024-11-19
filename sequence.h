@@ -54,22 +54,6 @@ typedef struct {
 } sequence;
 
 
-// typedef struct {
-//     int32 struct_size;
-//     uint8_t overflow;
-//     uint8_t data[FLEXIBLE_ARRAY_MEMBER];
-// } DNA;
-
-// typedef struct {
-//     uint8_t k;
-//     uint8_t *data;
-// } KMER;
-
-// typedef struct {
-//     uint8_t k;
-//     uint8_t *data;
-// } QKMER;
-
 Datum generate_kmers(PG_FUNCTION_ARGS); 
 
 char* seq_get_byte_binary_representation(const uint8_t value);
