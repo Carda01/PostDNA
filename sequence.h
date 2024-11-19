@@ -12,8 +12,6 @@
 
 #define QUERY_MASK 0xF // Binary: 1111.
 
-extern int globalQkmerFlag; 
-
 // Binary codes assigned to each DNA base.
 enum {
   BASE_A = 0x0, // Binary: 00.
@@ -34,6 +32,13 @@ enum {
   BASE_V = 0xD, // Binary: 1101, A, C, or G
 
   BASE_N = 0xE, // Binary: 1110, A, C, G, or T (any base)
+};
+
+
+enum {
+  DNA = 0,
+  KMER = 1,
+  QKMER = 2,
 };
 
 
@@ -69,21 +74,23 @@ Datum generate_kmers(PG_FUNCTION_ARGS);
 
 char* seq_get_byte_binary_representation(const uint8_t value);
 
-sequence* seq_string_to_sequence(const char *seq_str);
-char *seq_sequence_to_string(sequence *seq);
+sequence* seq_string_to_sequence(const char *seq_str, int type);
+char *seq_sequence_to_string(sequence *seq, int type);
 
-uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes);
-char* seq_decode(uint8_t* data, size_t sequence_len);
+uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes, int type);
+char* seq_decode(uint8_t* data, size_t sequence_len, int type);
 
-size_t seq_get_number_of_bytes(size_t seq_len);
-size_t seq_get_length(sequence* seq);
-uint8_t seq_get_overflow(size_t seq_length, size_t num_bytes);
+inline size_t seq_get_number_of_bytes(size_t seq_len, int type);
+inline size_t seq_get_length(sequence* seq, int type);
+inline uint8_t seq_get_overflow(size_t seq_length, int type);
 
 size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);
 
-bool seq_equals(sequence* seq1, sequence* seq2);
-void seq_kmer_check_length(char* str);
+bool seq_equals(sequence* seq1, sequence* seq2, int type);
 
 sequence* seq_generate_kmers(sequence* seq, uint8_t k);
+
+inline char* seq_get_string_type(int type);
+inline int seq_bases_per_byte(int type);
 
 #endif
