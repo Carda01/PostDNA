@@ -25,4 +25,4 @@ INSERT INTO t VALUES
 
 SELECT * FROM t;
 
-SELECT generate_kmers('CTGAAATT', 4);
+SELECT * FROM generate_kmers('CTGAAATT', 4);

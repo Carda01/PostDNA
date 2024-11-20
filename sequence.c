@@ -5,8 +5,6 @@
 #include "catalog/pg_type.h"
 #include "funcapi.h"
 
-int globalQkmerFlag = 0;
-
 
 inline char* seq_get_string_type(int type) {
     return type == DNA ? "DNA" : type == KMER ? "KMER" : "QKMER";
