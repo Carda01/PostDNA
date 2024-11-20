@@ -1,9 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "postgres.h"
 #include <stdlib.h>
 #include <stdint.h>
-#include "postgres.h"
 #include "fmgr.h"
 #include "libpq/pqformat.h"
 #include "utils/fmgrprotos.h"
