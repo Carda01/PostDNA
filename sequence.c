@@ -27,7 +27,7 @@ sequence* seq_string_to_sequence(const char *seq_str, int type) {
 
     memcpy(seq->data, data, num_bytes);
 
-    free(data);
+    pfree(data);
     return seq;
 }
 
@@ -53,7 +53,7 @@ inline uint8_t seq_get_overflow(size_t seq_length, int type) {
 
 // Helper used in debug, remember to free memory
 char* seq_get_byte_binary_representation(const uint8_t value) {
-  char* binary_representation = malloc(9);
+  char* binary_representation = palloc0(9);
   for (int i = 7; i >= 0; i--) {
     binary_representation[7-i] = '0' + ((value >> i) & 1);
   }
@@ -64,7 +64,7 @@ char* seq_get_byte_binary_representation(const uint8_t value) {
 
 uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes, int type) {
   *data_bytes = seq_get_number_of_bytes(sequence_len, type);
-  uint8_t *data = (uint8_t *) malloc(sizeof(uint8_t) * (*data_bytes));
+  uint8_t *data = (uint8_t *) palloc0(sizeof(uint8_t) * (*data_bytes));
   memset(data,0,(*data_bytes));
 
   for (size_t i = 0; i < sequence_len; ++i) {
@@ -139,7 +139,7 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
 
 char* seq_decode(uint8_t* data, size_t sequence_len, int type){
 
-  char *sequence = malloc(sizeof(char) * (sequence_len + 1));
+  char *sequence = palloc0(sizeof(char) * (sequence_len + 1));
 
   for (size_t i = 0; i < sequence_len; ++i) {
 
