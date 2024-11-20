@@ -292,6 +292,9 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
 
         sequence  *kmer = (sequence *) palloc(sizeof(sequence) + data_bytes);
         SET_VARSIZE(kmer, sizeof(sequence) + data_bytes);
+        kmer->overflow = seq_get_overflow(k, KMER);
+        uint8_t shift = kmer->overflow == 0? 0 :(4 - kmer->overflow) * 2;
+        uint8_t mask = 0b11111111 << shift;
 
         size_t init_byte = (2 * call_cntr) / 8;
         uint8_t init_pos = (2 * call_cntr) % 8;
@@ -301,10 +304,15 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
           kmer->data[c] <<= init_pos;
           if ((init_pos + step) / 8 != c) {
               kmer->data[c] |= dna->data[c + init_byte + 1] >> (8 - init_pos);
-          }
+          }            
         }
 
-        kmer->overflow = seq_get_overflow(k, 1);
+        kmer->data[data_bytes-1] &= mask;
+
+        // elog(NOTICE, "iteration %d", call_cntr);
+        // elog(NOTICE, "overflow %d", kmer->overflow);
+        // elog(NOTICE, "kmer->data[0]: %s ", seq_get_byte_binary_representation(kmer->data[0]));
+        // elog(NOTICE, "kmer string: %s \n", seq_sequence_to_string(kmer,KMER));
 
         result = PointerGetDatum(kmer);
 
