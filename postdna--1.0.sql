@@ -108,3 +108,47 @@ CREATE OR REPLACE FUNCTION text(qkmer)
 
 CREATE CAST (text as qkmer) WITH FUNCTION qkmer(text) AS IMPLICIT;
 CREATE CAST (qkmer as text) WITH FUNCTION text(qkmer);
+
+
+-- *********************************************************************** --
+-- KMERS
+
+CREATE FUNCTION kmer_eq(kmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'kmer_equals'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION kmer_ne(kmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'kmer_nequals'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION kmer_hash(kmer) 
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'kmer_hash'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR = (
+  LEFTARG = kmer, 
+  RIGHTARG = kmer,
+  PROCEDURE = kmer_eq,
+  COMMUTATOR = '=',
+  NEGATOR = '<>',
+  RESTRICT = eqsel,
+  JOIN = eqjoinsel
+);
+COMMENT ON OPERATOR =(kmer, kmer) IS 'equals?';
+
+CREATE OPERATOR <> (
+  LEFTARG = kmer,
+  RIGHTARG = kmer,
+  PROCEDURE = kmer_ne,
+  COMMUTATOR = '<>',
+  NEGATOR = '=',
+  RESTRICT = neqsel,
+  JOIN = neqjoinsel
+);
+
+COMMENT ON OPERATOR <>(kmer,kmer) IS 'not equals?';
+
+CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
+    OPERATOR 1 = (kmer, kmer),
+    FUNCTION 1 kmer_hash(kmer);

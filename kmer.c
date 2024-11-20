@@ -34,3 +34,33 @@ Datum kmer_cast_to_text(PG_FUNCTION_ARGS) {
     PG_FREE_IF_COPY(seq, 0);
     PG_RETURN_TEXT_P(out);
 }
+
+
+PG_FUNCTION_INFO_V1(kmer_equals);
+Datum kmer_equals(PG_FUNCTION_ARGS) {
+  sequence *kmer1 = PG_GETARG_SEQ_P(0);
+  sequence *kmer2 = PG_GETARG_SEQ_P(1);
+  bool result = seq_equals(kmer1, kmer2, KMER);
+  PG_FREE_IF_COPY(kmer1, 0);
+  PG_FREE_IF_COPY(kmer2, 1);
+  PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(kmer_nequals);
+Datum kmer_nequals(PG_FUNCTION_ARGS) {
+  sequence *kmer1 = PG_GETARG_SEQ_P(0);
+  sequence *kmer2 = PG_GETARG_SEQ_P(1);
+  bool result = !seq_equals(kmer1, kmer2, KMER);
+  PG_FREE_IF_COPY(kmer1, 0);
+  PG_FREE_IF_COPY(kmer2, 1);
+  PG_RETURN_BOOL(result);
+}
+
+
+PG_FUNCTION_INFO_V1(kmer_hash);
+Datum kmer_hash(PG_FUNCTION_ARGS) {
+    sequence *seq = PG_GETARG_SEQ_P(0);
+    int32 out = seq_hash(seq, KMER); 
+    PG_FREE_IF_COPY(seq, 0);
+    PG_RETURN_INT32(out);
+}

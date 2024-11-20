@@ -39,8 +39,12 @@ char *seq_sequence_to_string(sequence *seq, int type) {
     return seq_decode(seq->data, seq_get_length(seq, type), type);
 }
 
-inline size_t seq_get_number_of_bytes(size_t seq_len, int type) {
+inline size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type) {
   return (seq_len / seq_bases_per_byte(type)) + (seq_get_overflow(seq_len, type) != 0);
+}
+
+inline size_t seq_get_number_of_occupied_bytes(sequence* seq) {
+  return VARSIZE(seq) - sizeof(sequence);
 }
 
 inline size_t seq_get_length(sequence* seq, int type){
@@ -63,7 +67,7 @@ char* seq_get_byte_binary_representation(const uint8_t value) {
 
 
 uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes, int type) {
-  *data_bytes = seq_get_number_of_bytes(sequence_len, type);
+  *data_bytes = seq_get_number_of_bytes_from_length(sequence_len, type);
   uint8_t *data = (uint8_t *) palloc0(sizeof(uint8_t) * (*data_bytes));
   memset(data,0,(*data_bytes));
 
@@ -224,8 +228,9 @@ bool seq_equals(sequence* seq1, sequence* seq2, int type) {
     if (seq_get_length(seq1, type) != seq_get_length(seq2, type)) {
         return false;
     }
-
-    for (size_t i = 0; i < seq_get_length(seq1, type); ++i) {
+    
+    const size_t num_bytes = seq_get_number_of_occupied_bytes(seq1);
+    for (size_t i = 0; i < num_bytes; ++i) {
         if (seq1->data[i] != seq2->data[i]) {
             return false;
         }
@@ -234,6 +239,14 @@ bool seq_equals(sequence* seq1, sequence* seq2, int type) {
     return true;
 }
 
+int seq_hash(sequence* seq, int type) {
+  const size_t num_bytes = seq_get_number_of_occupied_bytes(seq);
+  int hash = 0;
+  for (int i = 0; i < num_bytes; i++){
+    hash += seq->data[i];
+  }
+  return hash;
+}
 
 PG_FUNCTION_INFO_V1(generate_kmers);
 Datum generate_kmers(PG_FUNCTION_ARGS)
@@ -250,7 +263,7 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
             errmsg("Invalid Kmer Length!")));  }
 
     size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(dna, DNA), k);
-    uint8_t data_bytes = seq_get_number_of_bytes(k, KMER);
+    uint8_t data_bytes = seq_get_number_of_bytes_from_length(k, KMER);
       
     if (SRF_IS_FIRSTCALL())
     {
