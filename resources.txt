@@ -1,3 +1,8 @@
 DNA ENCODING IDEA: https://dassencio.org/49
 POSTGRES EXTENSION DOCS: https://www.postgresql.org/docs/current/xfunc-c.html
 DEBUGGING: https://stackoverflow.com/questions/61361978/how-to-debug-postgres-extension
+
+-- possible plus
+- canonicalize
+- selectivity estimation -> look at restrict and join in contains, equals, starts_with
+- type modifier -> see in type definition how to do restrictions, e.g. kmers of only length 20

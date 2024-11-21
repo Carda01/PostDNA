@@ -67,7 +67,7 @@ char* seq_decode(uint8_t* data, size_t sequence_len, int type);
 
 inline size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type);
 inline size_t seq_get_number_of_occupied_bytes(sequence* seq);
-inline size_t seq_get_length(sequence* seq, int type);
+size_t seq_get_length(sequence* seq, int type);
 inline uint8_t seq_get_overflow(size_t seq_length, int type);
 
 size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);

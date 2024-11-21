@@ -10,8 +10,10 @@ Datum qkmer_in(PG_FUNCTION_ARGS);
 Datum qkmer_out(PG_FUNCTION_ARGS);
 Datum qkmer_cast_from_text(PG_FUNCTION_ARGS);
 Datum qkmer_cast_to_text(PG_FUNCTION_ARGS);
+Datum qkmer_equals(PG_FUNCTION_ARGS); 
+Datum qkmer_contains(PG_FUNCTION_ARGS); 
 
-bool qkmer_contains(sequence qkmer, sequence kmer);
+bool qkmer_contains_internal(sequence* qkmer, sequence* kmer);
 bool match_Qsymbol (uint8_t symbol, uint8_t kmer_base);
 
 

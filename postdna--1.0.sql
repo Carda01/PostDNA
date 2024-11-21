@@ -113,6 +113,7 @@ CREATE CAST (qkmer as text) WITH FUNCTION text(qkmer);
 -- *********************************************************************** --
 -- KMERS
 
+
 CREATE FUNCTION kmer_eq(kmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'kmer_equals'
@@ -152,3 +153,33 @@ COMMENT ON OPERATOR <>(kmer,kmer) IS 'not equals?';
 CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
     OPERATOR 1 = (kmer, kmer),
     FUNCTION 1 kmer_hash(kmer);
+
+------------------------------------------------------------------------------
+-----------------------------QKMER---------------------------------------------
+------------------------------------------------------------------------------
+
+CREATE FUNCTION qkmer_eq(qkmer, qkmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'qkmer_equals'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION qkmer_contains(qkmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR = (
+  LEFTARG = qkmer, 
+  RIGHTARG = qkmer,
+  PROCEDURE = qkmer_eq,
+  COMMUTATOR = '=',
+  RESTRICT = eqsel,
+  JOIN = eqjoinsel
+);
+COMMENT ON OPERATOR =(qkmer, qkmer) IS 'equals?';
+
+CREATE OPERATOR @> (
+  LEFTARG = qkmer, 
+  RIGHTARG = kmer,
+  PROCEDURE = qkmer_contains
+);
+COMMENT ON OPERATOR @>(qkmer, kmer) IS 'contains?';

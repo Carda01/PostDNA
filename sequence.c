@@ -47,7 +47,7 @@ inline size_t seq_get_number_of_occupied_bytes(sequence* seq) {
   return VARSIZE(seq) - sizeof(sequence);
 }
 
-inline size_t seq_get_length(sequence* seq, int type){
+size_t seq_get_length(sequence* seq, int type){
   return (VARSIZE(seq) - sizeof(sequence) - 1) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
 }
 
