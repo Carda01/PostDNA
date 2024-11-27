@@ -114,6 +114,7 @@ CREATE CAST (qkmer as text) WITH FUNCTION text(qkmer);
 -- KMERS
 
 
+
 CREATE FUNCTION kmer_eq(kmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'kmer_equals'
@@ -183,3 +184,18 @@ CREATE OPERATOR @> (
   PROCEDURE = qkmer_contains
 );
 COMMENT ON OPERATOR @>(qkmer, kmer) IS 'contains?';
+
+-- *********************************************************************** --
+-- Lengths Functions 
+
+CREATE FUNCTION length(dna) RETURNS integer
+    AS 'MODULE_PATHNAME', 'dna_length'
+    LANGUAGE C STRICT;
+
+CREATE FUNCTION length(kmer) RETURNS integer
+    AS 'MODULE_PATHNAME', 'kmer_length'
+    LANGUAGE C STRICT;
+
+CREATE FUNCTION length(qkmer) RETURNS integer
+    AS 'MODULE_PATHNAME', 'qkmer_length'
+    LANGUAGE C STRICT;

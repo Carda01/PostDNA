@@ -6,6 +6,14 @@
 
 PG_MODULE_MAGIC;
 
+PG_FUNCTION_INFO_V1(dna_length);
+Datum dna_length(PG_FUNCTION_ARGS)
+{
+    sequence *dna = (sequence *)PG_GETARG_POINTER(0);
+    size_t length = seq_get_length(dna, DNA);  
+    PG_RETURN_UINT32(length);
+}
+
 PG_FUNCTION_INFO_V1(dna_in);
 Datum dna_in(PG_FUNCTION_ARGS) {
     char *str = PG_GETARG_CSTRING(0);

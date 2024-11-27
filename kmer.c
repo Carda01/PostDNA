@@ -5,6 +5,14 @@
 #include <string.h>
 #include <stdio.h>
 
+PG_FUNCTION_INFO_V1(kmer_length);
+Datum kmer_length(PG_FUNCTION_ARGS)
+{
+    sequence *kmer = (sequence *)PG_GETARG_POINTER(0);
+    uint8_t kmer_length = seq_get_length(kmer, KMER);  // Get the length of the kmer sequence
+    PG_RETURN_UINT32(kmer_length);
+}
+
 PG_FUNCTION_INFO_V1(kmer_in);
 Datum kmer_in(PG_FUNCTION_ARGS) {
     char *str = PG_GETARG_CSTRING(0);

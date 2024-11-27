@@ -5,6 +5,13 @@
 #include <string.h>
 #include <stdio.h>
 
+PG_FUNCTION_INFO_V1(qkmer_length);
+Datum qkmer_length(PG_FUNCTION_ARGS)
+{
+    sequence *qkmer = (sequence *)PG_GETARG_POINTER(0);
+    uint8_t qkmer_length = seq_get_length(qkmer, QKMER);  // Get the length of the qkmer sequence
+    PG_RETURN_UINT32(qkmer_length);
+}
 
 PG_FUNCTION_INFO_V1(qkmer_in);
 Datum qkmer_in (PG_FUNCTION_ARGS) {
