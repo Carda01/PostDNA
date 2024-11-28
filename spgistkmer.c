@@ -93,12 +93,12 @@ typedef struct spgNodePtr
 
 
 Datum
-spg_text_config(PG_FUNCTION_ARGS)
+spg_sequence_config(PG_FUNCTION_ARGS)
 {
-	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
+	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType = TEXTOID;
+	cfg->prefixType = cfgin->attType;
 	cfg->labelType = INT2OID;
 	cfg->canReturnData = true;
 	cfg->longValuesOK = true;	/* suffixing will shorten long values */
@@ -181,7 +181,7 @@ searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
 }
 
 Datum
-spg_text_choose(PG_FUNCTION_ARGS)
+spg_sequence_choose(PG_FUNCTION_ARGS)
 {
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
