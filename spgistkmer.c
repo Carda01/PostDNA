@@ -41,6 +41,16 @@ spg_sequence_config(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
+inline uint8_t get_base_at_index(const uint8_t* data, int index){
+  int byte_index, overflow;
+  byte_index = index / 4;
+  overflow = index % 4;
+  uint8_t shift = 6 - 2 * overflow;
+  return (element >> shift) & BASE_MASK;
+}
+
+
 /*
  * Form a text datum from the given not-necessarily-null-terminated string,
  * using short varlena header format if possible
