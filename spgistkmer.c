@@ -40,6 +40,9 @@ spg_sequence_config(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+inline size_t kmer_get_length(sequence* seq) {
+    return seq_get_length(seq, KMER);
+}
 
 /*
  * Get the base from the data structure, given an index that would be the
@@ -126,7 +129,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	sequence	   *inSeq = DatumGetSEQP(in->datum);
 	uint8_t	   *inData = inSeq->data;
-	int			inLen = seq_get_length(inSeq, KMER);
+	int			inLen = kmer_get_length(inSeq);
 	uint8_t	   *prefixData = NULL;
 	int			prefixLen = 0;
 	int			commonLen = 0;
@@ -139,7 +142,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
 
 		prefixData = prefixSeq->data;
-		prefixLen = seq_get_length(prefixSeq, KMER);
+		prefixLen = kmer_get_length(prefixSeq);
 
 		commonLen = commonPrefix(inData,
 								 prefixData,
@@ -227,142 +230,128 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		else
 			out->result.matchNode.restDatum =
 				formSeqDatum(NULL, 0, 0); // TODO, check if NULL works
-	}
-	else if (in->allTheSame)
+
+    }
+    else if (in->allTheSame)
+    {
+        /*
+         * Can't use AddNode action, so split the tuple.  The upper tuple has
+         * the same prefix as before and uses a dummy node label -2 for the
+         * lower tuple.  The lower tuple has no prefix and the same node
+         * labels as the original tuple.
+         *
+         * Note: it might seem tempting to shorten the upper tuple's prefix,
+         * if it has one, then use its last byte as label for the lower tuple.
+         * But that doesn't win since we know the incoming value matches the
+         * whole prefix: we'd just end up splitting the lower tuple again.
+         */
+        out->resultType = spgSplitTuple;
+        out->result.splitTuple.prefixHasPrefix = in->hasPrefix;
+        out->result.splitTuple.prefixPrefixDatum = in->prefixDatum;
+        out->result.splitTuple.prefixNNodes = 1;
+        out->result.splitTuple.prefixNodeLabels = (Datum *) palloc(sizeof(Datum));
+        out->result.splitTuple.prefixNodeLabels[0] = Int16GetDatum(-2);
+        out->result.splitTuple.childNodeN = 0;
+        out->result.splitTuple.postfixHasPrefix = false;
+    }
+    else
+    {
+        /* Add a node for the not-previously-seen nodeBase value */
+        out->resultType = spgAddNode;
+        out->result.addNode.nodeLabel = Int16GetDatum(nodeBase);
+        out->result.addNode.nodeN = i;
+    }
+
+    PG_RETURN_VOID();
+}
+
+
+Datum
+spg_text_picksplit(PG_FUNCTION_ARGS)
+{
+	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
+	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
+	sequence	   *seq0 = DatumGetSEQP(in->datums[0]);
+	int			i,
+				commonLen;
+	spgNodePtr *nodes;
+
+	/* Identify longest common prefix, if any */
+    commonLen = kmer_get_length(seq0);
+	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
-		/*
-		 * Can't use AddNode action, so split the tuple.  The upper tuple has
-		 * the same prefix as before and uses a dummy node label -2 for the
-		 * lower tuple.  The lower tuple has no prefix and the same node
-		 * labels as the original tuple.
-		 *
-		 * Note: it might seem tempting to shorten the upper tuple's prefix,
-		 * if it has one, then use its last byte as label for the lower tuple.
-		 * But that doesn't win since we know the incoming value matches the
-		 * whole prefix: we'd just end up splitting the lower tuple again.
-		 */
-		out->resultType = spgSplitTuple;
-		out->result.splitTuple.prefixHasPrefix = in->hasPrefix;
-		out->result.splitTuple.prefixPrefixDatum = in->prefixDatum;
-		out->result.splitTuple.prefixNNodes = 1;
-		out->result.splitTuple.prefixNodeLabels = (Datum *) palloc(sizeof(Datum));
-		out->result.splitTuple.prefixNodeLabels[0] = Int16GetDatum(-2);
-		out->result.splitTuple.childNodeN = 0;
-		out->result.splitTuple.postfixHasPrefix = false;
+		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
+		int			tmp = commonPrefix(seq0->data,
+									   seqi->data,
+                                       0,
+									   kmer_get_length(seq0),
+									   kmer_get_length(seqi));
+
+		if (tmp < commonLen)
+			commonLen = tmp;
+	}
+
+	/*
+	 * Limit the prefix length, if necessary, to ensure that the resulting
+	 * inner tuple will fit on a page.
+	 */
+	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
+
+	/* Set node prefix to be that string, if it's not empty */
+	if (commonLen == 0)
+	{
+		out->hasPrefix = false;
 	}
 	else
 	{
-		/* Add a node for the not-previously-seen nodeBase value */
-		out->resultType = spgAddNode;
-		out->result.addNode.nodeLabel = Int16GetDatum(nodeBase);
-		out->result.addNode.nodeN = i;
+		out->hasPrefix = true;
+		out->prefixDatum = formSeqDatum(seq0->data, 0, commonLen);
+	}
+
+	/* Extract the node label (first non-common byte) from each value */
+	nodes = (spgNodePtr *) palloc(sizeof(spgNodePtr) * in->nTuples);
+
+	for (i = 0; i < in->nTuples; i++)
+	{
+		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
+
+		if (commonLen < kmer_get_length(seqi))
+			nodes[i].c = get_base_at_index(seqi->data, commonLen);
+		else
+			nodes[i].c = -1;	/* use -1 if string is all common */
+		nodes[i].i = i;
+		nodes[i].d = in->datums[i];
+	}
+
+	/* And emit results */
+	out->nNodes = 0;
+	out->nodeLabels = (Datum *) palloc(sizeof(Datum) * in->nTuples);
+	out->mapTuplesToNodes = (int *) palloc(sizeof(int) * in->nTuples);
+	out->leafTupleDatums = (Datum *) palloc(sizeof(Datum) * in->nTuples);
+
+	for (i = 0; i < in->nTuples; i++)
+	{
+		sequence	   *seqi = DatumGetSEQP(nodes[i].d);
+		Datum		leafD;
+
+		if (i == 0 || nodes[i].c != nodes[i - 1].c)
+		{
+			out->nodeLabels[out->nNodes] = Int16GetDatum(nodes[i].c);
+			out->nNodes++;
+		}
+
+		if (commonLen < kmer_get_length(seqi))
+			leafD = formSeqDatum(seqi->data, commonLen + 1,
+								  kmer_get_length(seqi) - commonLen - 1);
+		else
+			leafD = formSeqDatum(NULL, 0, 0); // TODO: check if it works when passing null
+
+		out->leafTupleDatums[nodes[i].i] = leafD;
+		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
 	}
 
 	PG_RETURN_VOID();
 }
-
-/* qsort comparator to sort spgNodePtr structs by "c" */
-// static int
-// cmpNodePtr(const void *a, const void *b)
-// {
-// 	const spgNodePtr *aa = (const spgNodePtr *) a;
-// 	const spgNodePtr *bb = (const spgNodePtr *) b;
-// 
-// 	return pg_cmp_s16(aa->c, bb->c);
-// }
-
-// Datum
-// spg_text_picksplit(PG_FUNCTION_ARGS)
-// {
-// 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
-// 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
-// 	text	   *text0 = DatumGetTextPP(in->datums[0]);
-// 	int			i,
-// 				commonLen;
-// 	spgNodePtr *nodes;
-// 
-// 	/* Identify longest common prefix, if any */
-// 	commonLen = VARSIZE_ANY_EXHDR(text0);
-// 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
-// 	{
-// 		text	   *texti = DatumGetTextPP(in->datums[i]);
-// 		int			tmp = commonPrefix(VARDATA_ANY(text0),
-// 									   VARDATA_ANY(texti),
-// 									   VARSIZE_ANY_EXHDR(text0),
-// 									   VARSIZE_ANY_EXHDR(texti));
-// 
-// 		if (tmp < commonLen)
-// 			commonLen = tmp;
-// 	}
-// 
-// 	/*
-// 	 * Limit the prefix length, if necessary, to ensure that the resulting
-// 	 * inner tuple will fit on a page.
-// 	 */
-// 	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
-// 
-// 	/* Set node prefix to be that string, if it's not empty */
-// 	if (commonLen == 0)
-// 	{
-// 		out->hasPrefix = false;
-// 	}
-// 	else
-// 	{
-// 		out->hasPrefix = true;
-// 		out->prefixDatum = formSeqDatum(VARDATA_ANY(text0), commonLen);
-// 	}
-// 
-// 	/* Extract the node label (first non-common byte) from each value */
-// 	nodes = (spgNodePtr *) palloc(sizeof(spgNodePtr) * in->nTuples);
-// 
-// 	for (i = 0; i < in->nTuples; i++)
-// 	{
-// 		text	   *texti = DatumGetTextPP(in->datums[i]);
-// 
-// 		if (commonLen < VARSIZE_ANY_EXHDR(texti))
-// 			nodes[i].c = *(unsigned char *) (VARDATA_ANY(texti) + commonLen);
-// 		else
-// 			nodes[i].c = -1;	/* use -1 if string is all common */
-// 		nodes[i].i = i;
-// 		nodes[i].d = in->datums[i];
-// 	}
-// 
-// 	/*
-// 	 * Sort by label values so that we can group the values into nodes.  This
-// 	 * also ensures that the nodes are ordered by label value, allowing the
-// 	 * use of binary search in searchChar.
-// 	 */
-// 	qsort(nodes, in->nTuples, sizeof(*nodes), cmpNodePtr);
-// 
-// 	/* And emit results */
-// 	out->nNodes = 0;
-// 	out->nodeLabels = (Datum *) palloc(sizeof(Datum) * in->nTuples);
-// 	out->mapTuplesToNodes = (int *) palloc(sizeof(int) * in->nTuples);
-// 	out->leafTupleDatums = (Datum *) palloc(sizeof(Datum) * in->nTuples);
-// 
-// 	for (i = 0; i < in->nTuples; i++)
-// 	{
-// 		text	   *texti = DatumGetTextPP(nodes[i].d);
-// 		Datum		leafD;
-// 
-// 		if (i == 0 || nodes[i].c != nodes[i - 1].c)
-// 		{
-// 			out->nodeLabels[out->nNodes] = Int16GetDatum(nodes[i].c);
-// 			out->nNodes++;
-// 		}
-// 
-// 		if (commonLen < VARSIZE_ANY_EXHDR(texti))
-// 			leafD = formSeqDatum(VARDATA_ANY(texti) + commonLen + 1,
-// 								  VARSIZE_ANY_EXHDR(texti) - commonLen - 1);
-// 		else
-// 			leafD = formSeqDatum(NULL, 0);
-// 
-// 		out->leafTupleDatums[nodes[i].i] = leafD;
-// 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
-// 	}
-// 
-// 	PG_RETURN_VOID();
-// }
 
 // Datum
 // spg_text_inner_consistent(PG_FUNCTION_ARGS)
