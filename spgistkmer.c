@@ -10,7 +10,6 @@
 #include "utils/fmgrprotos.h"
 #include "utils/pg_locale.h"
 #include "utils/varlena.h"
-#include "varatt.h"
 
 
 /*
@@ -51,120 +50,109 @@ inline uint8_t get_base_at_index(const uint8_t* data, int index){
   byte_index = index / 4;
   overflow = index % 4;
   uint8_t shift = 6 - 2 * overflow;
-  return (element >> shift) & BASE_MASK;
+  return (data[byte_index] >> shift) & BASE_MASK;
 }
 
 
 /*
- * Form a text datum from the given not-necessarily-null-terminated string,
- * using short varlena header format if possible
+ * Form a sequence datum from the given bytes
  */
-// static Datum
-// formTextDatum(const char *data, int datalen)
-// {
-// 	char	   *p;
-// 
-// 	p = (char *) palloc(datalen + VARHDRSZ);
-// 
-// 	if (datalen + VARHDRSZ_SHORT <= VARATT_SHORT_MAX)
-// 	{
-// 		SET_VARSIZE_SHORT(p, datalen + VARHDRSZ_SHORT);
-// 		if (datalen)
-// 			memcpy(p + VARHDRSZ_SHORT, data, datalen);
-// 	}
-// 	else
-// 	{
-// 		SET_VARSIZE(p, datalen + VARHDRSZ);
-// 		memcpy(p + VARHDRSZ, data, datalen);
-// 	}
-// 
-// 	return PointerGetDatum(p);
-// }
+static Datum
+formSeqDatum(const uint8_t *data, int begin, int datalen)
+{
+    sequence* seq;
+    size_t num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
+    int overflow = begin % 4;
+    data += (begin / 4);
+    if(overflow == 0){
+        seq = seq_create_sequence(data, datalen, num_bytes, KMER);
+    }
+    else {
+        uint8_t *new_data = (uint8_t *) palloc0(sizeof(uint8_t) * (num_bytes));
+        int bits_copied = 0;
+        for(int i = 0; bits_copied < datalen; i++){
+            new_data[i] = data[i] << (overflow * 2);
+            bits_copied += (4 - overflow);
+            if(bits_copied < datalen){
+                new_data[i] |= data[i + 1] >> ((4 - overflow)*2);
+                bits_copied += overflow;
+            }
+        }
+        seq = seq_create_sequence(new_data, datalen, num_bytes, KMER);
+        pfree(new_data);
+    }
+
+	return PointerGetDatum(seq);
+}
 
 /*
  * Find the length of the common prefix of a and b
  */
 static int
-commonPrefix(const uint8_t *a, const uint8_t *b, int lena, int lenb)
+commonPrefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb)
 {
 	int			i = 0;
 
-	while (i < lena && i < lenb && (((*a & *b) >> (6 - 2 * (i % 4)) & BASE_MASK) == BASE_MASK))
+	while (i < lena && i < lenb && get_base_at_index(a, i + starta) == get_base_at_index(b, i))
 	{
 		i++;
-        if(i % 4 == 0) {
-		    a++;
-		    b++;
-        }
 	}
 
 	return i;
 }
 
 /*
- * Binary search an array of int16 datums for a match to c
+ * Linear search an array of int16 datums for a match to c
  *
  * On success, *i gets the match location; on failure, it gets where to insert
  */
-// static bool
-// searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
-// {
-// 	int			StopLow = 0,
-// 				StopHigh = nNodes;
-// 
-// 	while (StopLow < StopHigh)
-// 	{
-// 		int			StopMiddle = (StopLow + StopHigh) >> 1;
-// 		int16		middle = DatumGetInt16(nodeLabels[StopMiddle]);
-// 
-// 		if (c < middle)
-// 			StopHigh = StopMiddle;
-// 		else if (c > middle)
-// 			StopLow = StopMiddle + 1;
-// 		else
-// 		{
-// 			*i = StopMiddle;
-// 			return true;
-// 		}
-// 	}
-// 
-// 	*i = StopHigh;
-// 	return false;
-// }
+static bool
+searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
+{
+    i = 0;
+    while(*i < nNodes) {
+        if(c == nodeLabels[*i]) {
+            return true;
+        }
+        *i += 1;
+    }
+	return false;
+}
 
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
 {
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
-	text	   *inText = DatumGetTextPP(in->datum);
-	char	   *inStr = VARDATA_ANY(inText);
-	int			inSize = VARSIZE_ANY_EXHDR(inText);
-	char	   *prefixStr = NULL;
-	int			prefixSize = 0;
+	sequence	   *inSeq = DatumGetSEQP(in->datum);
+	uint8_t	   *inData = inSeq->data;
+	int			inLen = seq_get_length(inSeq, KMER);
+	uint8_t	   *prefixData = NULL;
+	int			prefixLen = 0;
 	int			commonLen = 0;
-	int16		nodeChar = 0;
+	int16		nodeBase = 0;
 	int			i = 0;
 
-	/* Check for prefix match, set nodeChar to first byte after prefix */
+	/* Check for prefix match, set nodeBase to first byte after prefix */
 	if (in->hasPrefix)
 	{
-		sequence	   *prefixText = DatumGetTextPP(in->prefixDatum);
+		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
 
-		prefixStr = VARDATA_ANY(prefixText);
-		prefixSize = VARSIZE_ANY_EXHDR(prefixText);
+		prefixData = prefixSeq->data;
+		prefixLen = seq_get_length(prefixSeq, KMER);
 
-		commonLen = commonPrefix(inStr + in->level,
-								 prefixStr,
-								 inSize - in->level,
-								 prefixSize);
+		commonLen = commonPrefix(inData,
+								 prefixData,
+                                 in->level,
+								 inLen - in->level,
+								 prefixLen);
 
-		if (commonLen == prefixSize)
+		if (commonLen == prefixLen)
 		{
-			if (inSize - in->level > commonLen)
-				nodeChar = *(unsigned char *) (inStr + in->level + commonLen);
+			if (inLen - in->level > commonLen)
+				nodeBase = get_base_at_index(inData, in->level + commonLen);
 			else
-				nodeChar = -1;
+				nodeBase = -1;
 		}
 		else
 		{
@@ -179,17 +167,17 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 			{
 				out->result.splitTuple.prefixHasPrefix = true;
 				out->result.splitTuple.prefixPrefixDatum =
-					formTextDatum(prefixStr, commonLen);
+					formSeqDatum(prefixData, 0, commonLen);
 			}
 			out->result.splitTuple.prefixNNodes = 1;
 			out->result.splitTuple.prefixNodeLabels =
 				(Datum *) palloc(sizeof(Datum));
 			out->result.splitTuple.prefixNodeLabels[0] =
-				Int16GetDatum(*(unsigned char *) (prefixStr + commonLen));
+				Int16GetDatum(get_base_at_index(prefixData, commonLen));
 
 			out->result.splitTuple.childNodeN = 0;
 
-			if (prefixSize - commonLen == 1)
+			if (prefixLen - commonLen == 1)
 			{
 				out->result.splitTuple.postfixHasPrefix = false;
 			}
@@ -197,24 +185,25 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 			{
 				out->result.splitTuple.postfixHasPrefix = true;
 				out->result.splitTuple.postfixPrefixDatum =
-					formTextDatum(prefixStr + commonLen + 1,
-								  prefixSize - commonLen - 1);
+					formSeqDatum(prefixData,
+                                 commonLen + 1,
+								 prefixLen - commonLen - 1);
 			}
 
 			PG_RETURN_VOID();
 		}
 	}
-	else if (inSize > in->level)
+	else if (inLen > in->level)
 	{
-		nodeChar = *(unsigned char *) (inStr + in->level);
+        nodeBase = get_base_at_index(inData, in->level);
 	}
 	else
 	{
-		nodeChar = -1;
+		nodeBase = -1;
 	}
 
-	/* Look up nodeChar in the node label array */
-	if (searchChar(in->nodeLabels, in->nNodes, nodeChar, &i))
+	/* Look up nodeBase in the node label array */
+	if (searchChar(in->nodeLabels, in->nNodes, nodeBase, &i))
 	{
 		/*
 		 * Descend to existing node.  (If in->allTheSame, the core code will
@@ -227,16 +216,17 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		out->resultType = spgMatchNode;
 		out->result.matchNode.nodeN = i;
 		levelAdd = commonLen;
-		if (nodeChar >= 0)
+		if (nodeBase >= 0)
 			levelAdd++;
 		out->result.matchNode.levelAdd = levelAdd;
-		if (inSize - in->level - levelAdd > 0)
+		if (inLen - in->level - levelAdd > 0)
 			out->result.matchNode.restDatum =
-				formTextDatum(inStr + in->level + levelAdd,
-							  inSize - in->level - levelAdd);
+				formSeqDatum(inData,
+                             in->level + levelAdd,
+							 inLen - in->level - levelAdd);
 		else
 			out->result.matchNode.restDatum =
-				formTextDatum(NULL, 0);
+				formSeqDatum(NULL, 0, 0); // TODO, check if NULL works
 	}
 	else if (in->allTheSame)
 	{
@@ -262,9 +252,9 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		/* Add a node for the not-previously-seen nodeChar value */
+		/* Add a node for the not-previously-seen nodeBase value */
 		out->resultType = spgAddNode;
-		out->result.addNode.nodeLabel = Int16GetDatum(nodeChar);
+		out->result.addNode.nodeLabel = Int16GetDatum(nodeBase);
 		out->result.addNode.nodeN = i;
 	}
 
@@ -319,7 +309,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 // 	else
 // 	{
 // 		out->hasPrefix = true;
-// 		out->prefixDatum = formTextDatum(VARDATA_ANY(text0), commonLen);
+// 		out->prefixDatum = formSeqDatum(VARDATA_ANY(text0), commonLen);
 // 	}
 // 
 // 	/* Extract the node label (first non-common byte) from each value */
@@ -362,10 +352,10 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 // 		}
 // 
 // 		if (commonLen < VARSIZE_ANY_EXHDR(texti))
-// 			leafD = formTextDatum(VARDATA_ANY(texti) + commonLen + 1,
+// 			leafD = formSeqDatum(VARDATA_ANY(texti) + commonLen + 1,
 // 								  VARSIZE_ANY_EXHDR(texti) - commonLen - 1);
 // 		else
-// 			leafD = formTextDatum(NULL, 0);
+// 			leafD = formSeqDatum(NULL, 0);
 // 
 // 		out->leafTupleDatums[nodes[i].i] = leafD;
 // 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
