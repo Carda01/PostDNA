@@ -1,4 +1,5 @@
-drop table t;
+drop table if exists t;
+drop table if exists km;
 drop extension if exists postdna;
 
 create extension postdna;
