@@ -57,6 +57,8 @@ typedef struct {
 
 Datum generate_kmers(PG_FUNCTION_ARGS); 
 
+sequence* seq_create_sequence(const uint8_t* data, size_t seq_length, size_t num_bytes, int type);
+
 char* seq_get_byte_binary_representation(const uint8_t value);
 
 sequence* seq_string_to_sequence(const char *seq_str, int type);
@@ -65,8 +67,8 @@ char *seq_sequence_to_string(sequence *seq, int type);
 uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data_bytes, int type);
 char* seq_decode(uint8_t* data, size_t sequence_len, int type);
 
-inline size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type);
-inline size_t seq_get_number_of_occupied_bytes(sequence* seq);
+size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type);
+size_t seq_get_number_of_occupied_bytes(sequence* seq);
 size_t seq_get_length(sequence* seq, int type);
 inline uint8_t seq_get_overflow(size_t seq_length, int type);
 

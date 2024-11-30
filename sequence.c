@@ -1,4 +1,5 @@
 #include "sequence.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include "funcapi.h"
@@ -8,6 +9,17 @@
 
 inline char* seq_get_string_type(int type) {
     return type == DNA ? "DNA" : type == KMER ? "KMER" : "QKMER";
+}
+
+
+sequence* seq_create_sequence(const uint8_t* data, size_t seq_length, size_t num_bytes, int type) {
+    sequence *seq = (sequence *) palloc0(sizeof(sequence) + num_bytes);
+    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
+    seq->overflow = seq_get_overflow(seq_length, type);
+
+    memcpy(seq->data, data, num_bytes);
+
+    return seq;
 }
 
 
@@ -21,11 +33,7 @@ sequence* seq_string_to_sequence(const char *seq_str, int type) {
     size_t num_bytes;
     uint8_t* data = seq_encode(seq_str, seq_length, &num_bytes, type);
 
-    sequence *seq = (sequence *) palloc(sizeof(sequence) + num_bytes);
-    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
-    seq->overflow = seq_get_overflow(seq_length, type);
-
-    memcpy(seq->data, data, num_bytes);
+    sequence *seq = seq_create_sequence(data, seq_length, num_bytes, type);
 
     pfree(data);
     return seq;
@@ -39,16 +47,16 @@ char *seq_sequence_to_string(sequence *seq, int type) {
     return seq_decode(seq->data, seq_get_length(seq, type), type);
 }
 
-inline size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type) {
+size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type) {
   return (seq_len / seq_bases_per_byte(type)) + (seq_get_overflow(seq_len, type) != 0);
 }
 
-inline size_t seq_get_number_of_occupied_bytes(sequence* seq) {
+size_t seq_get_number_of_occupied_bytes(sequence* seq) {
   return VARSIZE(seq) - sizeof(sequence);
 }
 
 size_t seq_get_length(sequence* seq, int type){
-  return (VARSIZE(seq) - sizeof(sequence) - 1) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
+  return (VARSIZE(seq) - sizeof(sequence) - sizeof(uint8_t)) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
 }
 
 inline uint8_t seq_get_overflow(size_t seq_length, int type) {
