@@ -42,6 +42,10 @@ spg_sequence_config(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * Get the base from the data structure, given an index that would be the
+ * same that element would have if it was a string
+ */
 inline uint8_t get_base_at_index(const uint8_t* data, int index){
   int byte_index, overflow;
   byte_index = index / 4;
@@ -55,27 +59,27 @@ inline uint8_t get_base_at_index(const uint8_t* data, int index){
  * Form a text datum from the given not-necessarily-null-terminated string,
  * using short varlena header format if possible
  */
-static Datum
-formTextDatum(const char *data, int datalen)
-{
-	char	   *p;
-
-	p = (char *) palloc(datalen + VARHDRSZ);
-
-	if (datalen + VARHDRSZ_SHORT <= VARATT_SHORT_MAX)
-	{
-		SET_VARSIZE_SHORT(p, datalen + VARHDRSZ_SHORT);
-		if (datalen)
-			memcpy(p + VARHDRSZ_SHORT, data, datalen);
-	}
-	else
-	{
-		SET_VARSIZE(p, datalen + VARHDRSZ);
-		memcpy(p + VARHDRSZ, data, datalen);
-	}
-
-	return PointerGetDatum(p);
-}
+// static Datum
+// formTextDatum(const char *data, int datalen)
+// {
+// 	char	   *p;
+// 
+// 	p = (char *) palloc(datalen + VARHDRSZ);
+// 
+// 	if (datalen + VARHDRSZ_SHORT <= VARATT_SHORT_MAX)
+// 	{
+// 		SET_VARSIZE_SHORT(p, datalen + VARHDRSZ_SHORT);
+// 		if (datalen)
+// 			memcpy(p + VARHDRSZ_SHORT, data, datalen);
+// 	}
+// 	else
+// 	{
+// 		SET_VARSIZE(p, datalen + VARHDRSZ);
+// 		memcpy(p + VARHDRSZ, data, datalen);
+// 	}
+// 
+// 	return PointerGetDatum(p);
+// }
 
 /*
  * Find the length of the common prefix of a and b
@@ -87,11 +91,11 @@ commonPrefix(const uint8_t *a, const uint8_t *b, int lena, int lenb)
 
 	while (i < lena && i < lenb && (((*a & *b) >> (6 - 2 * (i % 4)) & BASE_MASK) == BASE_MASK))
 	{
-        if(i % 4 == 3) {
+		i++;
+        if(i % 4 == 0) {
 		    a++;
 		    b++;
         }
-		i++;
 	}
 
 	return i;
@@ -102,31 +106,31 @@ commonPrefix(const uint8_t *a, const uint8_t *b, int lena, int lenb)
  *
  * On success, *i gets the match location; on failure, it gets where to insert
  */
-static bool
-searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
-{
-	int			StopLow = 0,
-				StopHigh = nNodes;
-
-	while (StopLow < StopHigh)
-	{
-		int			StopMiddle = (StopLow + StopHigh) >> 1;
-		int16		middle = DatumGetInt16(nodeLabels[StopMiddle]);
-
-		if (c < middle)
-			StopHigh = StopMiddle;
-		else if (c > middle)
-			StopLow = StopMiddle + 1;
-		else
-		{
-			*i = StopMiddle;
-			return true;
-		}
-	}
-
-	*i = StopHigh;
-	return false;
-}
+// static bool
+// searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
+// {
+// 	int			StopLow = 0,
+// 				StopHigh = nNodes;
+// 
+// 	while (StopLow < StopHigh)
+// 	{
+// 		int			StopMiddle = (StopLow + StopHigh) >> 1;
+// 		int16		middle = DatumGetInt16(nodeLabels[StopMiddle]);
+// 
+// 		if (c < middle)
+// 			StopHigh = StopMiddle;
+// 		else if (c > middle)
+// 			StopLow = StopMiddle + 1;
+// 		else
+// 		{
+// 			*i = StopMiddle;
+// 			return true;
+// 		}
+// 	}
+// 
+// 	*i = StopHigh;
+// 	return false;
+// }
 
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
@@ -145,7 +149,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	/* Check for prefix match, set nodeChar to first byte after prefix */
 	if (in->hasPrefix)
 	{
-		text	   *prefixText = DatumGetTextPP(in->prefixDatum);
+		sequence	   *prefixText = DatumGetTextPP(in->prefixDatum);
 
 		prefixStr = VARDATA_ANY(prefixText);
 		prefixSize = VARSIZE_ANY_EXHDR(prefixText);
@@ -268,382 +272,382 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 }
 
 /* qsort comparator to sort spgNodePtr structs by "c" */
-static int
-cmpNodePtr(const void *a, const void *b)
-{
-	const spgNodePtr *aa = (const spgNodePtr *) a;
-	const spgNodePtr *bb = (const spgNodePtr *) b;
+// static int
+// cmpNodePtr(const void *a, const void *b)
+// {
+// 	const spgNodePtr *aa = (const spgNodePtr *) a;
+// 	const spgNodePtr *bb = (const spgNodePtr *) b;
+// 
+// 	return pg_cmp_s16(aa->c, bb->c);
+// }
 
-	return pg_cmp_s16(aa->c, bb->c);
-}
+// Datum
+// spg_text_picksplit(PG_FUNCTION_ARGS)
+// {
+// 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
+// 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
+// 	text	   *text0 = DatumGetTextPP(in->datums[0]);
+// 	int			i,
+// 				commonLen;
+// 	spgNodePtr *nodes;
+// 
+// 	/* Identify longest common prefix, if any */
+// 	commonLen = VARSIZE_ANY_EXHDR(text0);
+// 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
+// 	{
+// 		text	   *texti = DatumGetTextPP(in->datums[i]);
+// 		int			tmp = commonPrefix(VARDATA_ANY(text0),
+// 									   VARDATA_ANY(texti),
+// 									   VARSIZE_ANY_EXHDR(text0),
+// 									   VARSIZE_ANY_EXHDR(texti));
+// 
+// 		if (tmp < commonLen)
+// 			commonLen = tmp;
+// 	}
+// 
+// 	/*
+// 	 * Limit the prefix length, if necessary, to ensure that the resulting
+// 	 * inner tuple will fit on a page.
+// 	 */
+// 	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
+// 
+// 	/* Set node prefix to be that string, if it's not empty */
+// 	if (commonLen == 0)
+// 	{
+// 		out->hasPrefix = false;
+// 	}
+// 	else
+// 	{
+// 		out->hasPrefix = true;
+// 		out->prefixDatum = formTextDatum(VARDATA_ANY(text0), commonLen);
+// 	}
+// 
+// 	/* Extract the node label (first non-common byte) from each value */
+// 	nodes = (spgNodePtr *) palloc(sizeof(spgNodePtr) * in->nTuples);
+// 
+// 	for (i = 0; i < in->nTuples; i++)
+// 	{
+// 		text	   *texti = DatumGetTextPP(in->datums[i]);
+// 
+// 		if (commonLen < VARSIZE_ANY_EXHDR(texti))
+// 			nodes[i].c = *(unsigned char *) (VARDATA_ANY(texti) + commonLen);
+// 		else
+// 			nodes[i].c = -1;	/* use -1 if string is all common */
+// 		nodes[i].i = i;
+// 		nodes[i].d = in->datums[i];
+// 	}
+// 
+// 	/*
+// 	 * Sort by label values so that we can group the values into nodes.  This
+// 	 * also ensures that the nodes are ordered by label value, allowing the
+// 	 * use of binary search in searchChar.
+// 	 */
+// 	qsort(nodes, in->nTuples, sizeof(*nodes), cmpNodePtr);
+// 
+// 	/* And emit results */
+// 	out->nNodes = 0;
+// 	out->nodeLabels = (Datum *) palloc(sizeof(Datum) * in->nTuples);
+// 	out->mapTuplesToNodes = (int *) palloc(sizeof(int) * in->nTuples);
+// 	out->leafTupleDatums = (Datum *) palloc(sizeof(Datum) * in->nTuples);
+// 
+// 	for (i = 0; i < in->nTuples; i++)
+// 	{
+// 		text	   *texti = DatumGetTextPP(nodes[i].d);
+// 		Datum		leafD;
+// 
+// 		if (i == 0 || nodes[i].c != nodes[i - 1].c)
+// 		{
+// 			out->nodeLabels[out->nNodes] = Int16GetDatum(nodes[i].c);
+// 			out->nNodes++;
+// 		}
+// 
+// 		if (commonLen < VARSIZE_ANY_EXHDR(texti))
+// 			leafD = formTextDatum(VARDATA_ANY(texti) + commonLen + 1,
+// 								  VARSIZE_ANY_EXHDR(texti) - commonLen - 1);
+// 		else
+// 			leafD = formTextDatum(NULL, 0);
+// 
+// 		out->leafTupleDatums[nodes[i].i] = leafD;
+// 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
+// 	}
+// 
+// 	PG_RETURN_VOID();
+// }
 
-Datum
-spg_text_picksplit(PG_FUNCTION_ARGS)
-{
-	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
-	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
-	text	   *text0 = DatumGetTextPP(in->datums[0]);
-	int			i,
-				commonLen;
-	spgNodePtr *nodes;
+// Datum
+// spg_text_inner_consistent(PG_FUNCTION_ARGS)
+// {
+// 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
+// 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
+// 	bool		collate_is_c = pg_newlocale_from_collation(PG_GET_COLLATION())->collate_is_c;
+// 	text	   *reconstructedValue;
+// 	text	   *reconstrText;
+// 	int			maxReconstrLen;
+// 	text	   *prefixText = NULL;
+// 	int			prefixSize = 0;
+// 	int			i;
+// 
+// 	/*
+// 	 * Reconstruct values represented at this tuple, including parent data,
+// 	 * prefix of this tuple if any, and the node label if it's non-dummy.
+// 	 * in->level should be the length of the previously reconstructed value,
+// 	 * and the number of bytes added here is prefixSize or prefixSize + 1.
+// 	 *
+// 	 * Note: we assume that in->reconstructedValue isn't toasted and doesn't
+// 	 * have a short varlena header.  This is okay because it must have been
+// 	 * created by a previous invocation of this routine, and we always emit
+// 	 * long-format reconstructed values.
+// 	 */
+// 	reconstructedValue = (text *) DatumGetPointer(in->reconstructedValue);
+// 	Assert(reconstructedValue == NULL ? in->level == 0 :
+// 		   VARSIZE_ANY_EXHDR(reconstructedValue) == in->level);
+// 
+// 	maxReconstrLen = in->level + 1;
+// 	if (in->hasPrefix)
+// 	{
+// 		prefixText = DatumGetTextPP(in->prefixDatum);
+// 		prefixSize = VARSIZE_ANY_EXHDR(prefixText);
+// 		maxReconstrLen += prefixSize;
+// 	}
+// 
+// 	reconstrText = palloc(VARHDRSZ + maxReconstrLen);
+// 	SET_VARSIZE(reconstrText, VARHDRSZ + maxReconstrLen);
+// 
+// 	if (in->level)
+// 		memcpy(VARDATA(reconstrText),
+// 			   VARDATA(reconstructedValue),
+// 			   in->level);
+// 	if (prefixSize)
+// 		memcpy(((char *) VARDATA(reconstrText)) + in->level,
+// 			   VARDATA_ANY(prefixText),
+// 			   prefixSize);
+// 	/* last byte of reconstrText will be filled in below */
+// 
+// 	/*
+// 	 * Scan the child nodes.  For each one, complete the reconstructed value
+// 	 * and see if it's consistent with the query.  If so, emit an entry into
+// 	 * the output arrays.
+// 	 */
+// 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
+// 	out->levelAdds = (int *) palloc(sizeof(int) * in->nNodes);
+// 	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
+// 	out->nNodes = 0;
+// 
+// 	for (i = 0; i < in->nNodes; i++)
+// 	{
+// 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
+// 		int			thisLen;
+// 		bool		res = true;
+// 		int			j;
+// 
+// 		/* If nodeChar is a dummy value, don't include it in data */
+// 		if (nodeChar <= 0)
+// 			thisLen = maxReconstrLen - 1;
+// 		else
+// 		{
+// 			((unsigned char *) VARDATA(reconstrText))[maxReconstrLen - 1] = nodeChar;
+// 			thisLen = maxReconstrLen;
+// 		}
+// 
+// 		for (j = 0; j < in->nkeys; j++)
+// 		{
+// 			StrategyNumber strategy = in->scankeys[j].sk_strategy;
+// 			text	   *inText;
+// 			int			inSize;
+// 			int			r;
+// 
+// 			/*
+// 			 * If it's a collation-aware operator, but the collation is C, we
+// 			 * can treat it as non-collation-aware.  With non-C collation we
+// 			 * need to traverse whole tree :-( so there's no point in making
+// 			 * any check here.  (Note also that our reconstructed value may
+// 			 * well end with a partial multibyte character, so that applying
+// 			 * any encoding-sensitive test to it would be risky anyhow.)
+// 			 */
+// 			if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
+// 			{
+// 				if (collate_is_c)
+// 					strategy -= SPG_STRATEGY_ADDITION;
+// 				else
+// 					continue;
+// 			}
+// 
+// 			inText = DatumGetTextPP(in->scankeys[j].sk_argument);
+// 			inSize = VARSIZE_ANY_EXHDR(inText);
+// 
+// 			r = memcmp(VARDATA(reconstrText), VARDATA_ANY(inText),
+// 					   Min(inSize, thisLen));
+// 
+// 			switch (strategy)
+// 			{
+// 				case BTLessStrategyNumber:
+// 				case BTLessEqualStrategyNumber:
+// 					if (r > 0)
+// 						res = false;
+// 					break;
+// 				case BTEqualStrategyNumber:
+// 					if (r != 0 || inSize < thisLen)
+// 						res = false;
+// 					break;
+// 				case BTGreaterEqualStrategyNumber:
+// 				case BTGreaterStrategyNumber:
+// 					if (r < 0)
+// 						res = false;
+// 					break;
+// 				case RTPrefixStrategyNumber:
+// 					if (r != 0)
+// 						res = false;
+// 					break;
+// 				default:
+// 					elog(ERROR, "unrecognized strategy number: %d",
+// 						 in->scankeys[j].sk_strategy);
+// 					break;
+// 			}
+// 
+// 			if (!res)
+// 				break;			/* no need to consider remaining conditions */
+// 		}
+// 
+// 		if (res)
+// 		{
+// 			out->nodeNumbers[out->nNodes] = i;
+// 			out->levelAdds[out->nNodes] = thisLen - in->level;
+// 			SET_VARSIZE(reconstrText, VARHDRSZ + thisLen);
+// 			out->reconstructedValues[out->nNodes] =
+// 				datumCopy(PointerGetDatum(reconstrText), false, -1);
+// 			out->nNodes++;
+// 		}
+// 	}
+// 
+// 	PG_RETURN_VOID();
+// }
 
-	/* Identify longest common prefix, if any */
-	commonLen = VARSIZE_ANY_EXHDR(text0);
-	for (i = 1; i < in->nTuples && commonLen > 0; i++)
-	{
-		text	   *texti = DatumGetTextPP(in->datums[i]);
-		int			tmp = commonPrefix(VARDATA_ANY(text0),
-									   VARDATA_ANY(texti),
-									   VARSIZE_ANY_EXHDR(text0),
-									   VARSIZE_ANY_EXHDR(texti));
-
-		if (tmp < commonLen)
-			commonLen = tmp;
-	}
-
-	/*
-	 * Limit the prefix length, if necessary, to ensure that the resulting
-	 * inner tuple will fit on a page.
-	 */
-	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
-
-	/* Set node prefix to be that string, if it's not empty */
-	if (commonLen == 0)
-	{
-		out->hasPrefix = false;
-	}
-	else
-	{
-		out->hasPrefix = true;
-		out->prefixDatum = formTextDatum(VARDATA_ANY(text0), commonLen);
-	}
-
-	/* Extract the node label (first non-common byte) from each value */
-	nodes = (spgNodePtr *) palloc(sizeof(spgNodePtr) * in->nTuples);
-
-	for (i = 0; i < in->nTuples; i++)
-	{
-		text	   *texti = DatumGetTextPP(in->datums[i]);
-
-		if (commonLen < VARSIZE_ANY_EXHDR(texti))
-			nodes[i].c = *(unsigned char *) (VARDATA_ANY(texti) + commonLen);
-		else
-			nodes[i].c = -1;	/* use -1 if string is all common */
-		nodes[i].i = i;
-		nodes[i].d = in->datums[i];
-	}
-
-	/*
-	 * Sort by label values so that we can group the values into nodes.  This
-	 * also ensures that the nodes are ordered by label value, allowing the
-	 * use of binary search in searchChar.
-	 */
-	qsort(nodes, in->nTuples, sizeof(*nodes), cmpNodePtr);
-
-	/* And emit results */
-	out->nNodes = 0;
-	out->nodeLabels = (Datum *) palloc(sizeof(Datum) * in->nTuples);
-	out->mapTuplesToNodes = (int *) palloc(sizeof(int) * in->nTuples);
-	out->leafTupleDatums = (Datum *) palloc(sizeof(Datum) * in->nTuples);
-
-	for (i = 0; i < in->nTuples; i++)
-	{
-		text	   *texti = DatumGetTextPP(nodes[i].d);
-		Datum		leafD;
-
-		if (i == 0 || nodes[i].c != nodes[i - 1].c)
-		{
-			out->nodeLabels[out->nNodes] = Int16GetDatum(nodes[i].c);
-			out->nNodes++;
-		}
-
-		if (commonLen < VARSIZE_ANY_EXHDR(texti))
-			leafD = formTextDatum(VARDATA_ANY(texti) + commonLen + 1,
-								  VARSIZE_ANY_EXHDR(texti) - commonLen - 1);
-		else
-			leafD = formTextDatum(NULL, 0);
-
-		out->leafTupleDatums[nodes[i].i] = leafD;
-		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
-	}
-
-	PG_RETURN_VOID();
-}
-
-Datum
-spg_text_inner_consistent(PG_FUNCTION_ARGS)
-{
-	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
-	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-	bool		collate_is_c = pg_newlocale_from_collation(PG_GET_COLLATION())->collate_is_c;
-	text	   *reconstructedValue;
-	text	   *reconstrText;
-	int			maxReconstrLen;
-	text	   *prefixText = NULL;
-	int			prefixSize = 0;
-	int			i;
-
-	/*
-	 * Reconstruct values represented at this tuple, including parent data,
-	 * prefix of this tuple if any, and the node label if it's non-dummy.
-	 * in->level should be the length of the previously reconstructed value,
-	 * and the number of bytes added here is prefixSize or prefixSize + 1.
-	 *
-	 * Note: we assume that in->reconstructedValue isn't toasted and doesn't
-	 * have a short varlena header.  This is okay because it must have been
-	 * created by a previous invocation of this routine, and we always emit
-	 * long-format reconstructed values.
-	 */
-	reconstructedValue = (text *) DatumGetPointer(in->reconstructedValue);
-	Assert(reconstructedValue == NULL ? in->level == 0 :
-		   VARSIZE_ANY_EXHDR(reconstructedValue) == in->level);
-
-	maxReconstrLen = in->level + 1;
-	if (in->hasPrefix)
-	{
-		prefixText = DatumGetTextPP(in->prefixDatum);
-		prefixSize = VARSIZE_ANY_EXHDR(prefixText);
-		maxReconstrLen += prefixSize;
-	}
-
-	reconstrText = palloc(VARHDRSZ + maxReconstrLen);
-	SET_VARSIZE(reconstrText, VARHDRSZ + maxReconstrLen);
-
-	if (in->level)
-		memcpy(VARDATA(reconstrText),
-			   VARDATA(reconstructedValue),
-			   in->level);
-	if (prefixSize)
-		memcpy(((char *) VARDATA(reconstrText)) + in->level,
-			   VARDATA_ANY(prefixText),
-			   prefixSize);
-	/* last byte of reconstrText will be filled in below */
-
-	/*
-	 * Scan the child nodes.  For each one, complete the reconstructed value
-	 * and see if it's consistent with the query.  If so, emit an entry into
-	 * the output arrays.
-	 */
-	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
-	out->levelAdds = (int *) palloc(sizeof(int) * in->nNodes);
-	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
-	out->nNodes = 0;
-
-	for (i = 0; i < in->nNodes; i++)
-	{
-		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
-		int			thisLen;
-		bool		res = true;
-		int			j;
-
-		/* If nodeChar is a dummy value, don't include it in data */
-		if (nodeChar <= 0)
-			thisLen = maxReconstrLen - 1;
-		else
-		{
-			((unsigned char *) VARDATA(reconstrText))[maxReconstrLen - 1] = nodeChar;
-			thisLen = maxReconstrLen;
-		}
-
-		for (j = 0; j < in->nkeys; j++)
-		{
-			StrategyNumber strategy = in->scankeys[j].sk_strategy;
-			text	   *inText;
-			int			inSize;
-			int			r;
-
-			/*
-			 * If it's a collation-aware operator, but the collation is C, we
-			 * can treat it as non-collation-aware.  With non-C collation we
-			 * need to traverse whole tree :-( so there's no point in making
-			 * any check here.  (Note also that our reconstructed value may
-			 * well end with a partial multibyte character, so that applying
-			 * any encoding-sensitive test to it would be risky anyhow.)
-			 */
-			if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
-			{
-				if (collate_is_c)
-					strategy -= SPG_STRATEGY_ADDITION;
-				else
-					continue;
-			}
-
-			inText = DatumGetTextPP(in->scankeys[j].sk_argument);
-			inSize = VARSIZE_ANY_EXHDR(inText);
-
-			r = memcmp(VARDATA(reconstrText), VARDATA_ANY(inText),
-					   Min(inSize, thisLen));
-
-			switch (strategy)
-			{
-				case BTLessStrategyNumber:
-				case BTLessEqualStrategyNumber:
-					if (r > 0)
-						res = false;
-					break;
-				case BTEqualStrategyNumber:
-					if (r != 0 || inSize < thisLen)
-						res = false;
-					break;
-				case BTGreaterEqualStrategyNumber:
-				case BTGreaterStrategyNumber:
-					if (r < 0)
-						res = false;
-					break;
-				case RTPrefixStrategyNumber:
-					if (r != 0)
-						res = false;
-					break;
-				default:
-					elog(ERROR, "unrecognized strategy number: %d",
-						 in->scankeys[j].sk_strategy);
-					break;
-			}
-
-			if (!res)
-				break;			/* no need to consider remaining conditions */
-		}
-
-		if (res)
-		{
-			out->nodeNumbers[out->nNodes] = i;
-			out->levelAdds[out->nNodes] = thisLen - in->level;
-			SET_VARSIZE(reconstrText, VARHDRSZ + thisLen);
-			out->reconstructedValues[out->nNodes] =
-				datumCopy(PointerGetDatum(reconstrText), false, -1);
-			out->nNodes++;
-		}
-	}
-
-	PG_RETURN_VOID();
-}
-
-Datum
-spg_text_leaf_consistent(PG_FUNCTION_ARGS)
-{
-	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
-	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
-	int			level = in->level;
-	text	   *leafValue,
-			   *reconstrValue = NULL;
-	char	   *fullValue;
-	int			fullLen;
-	bool		res;
-	int			j;
-
-	/* all tests are exact */
-	out->recheck = false;
-
-	leafValue = DatumGetTextPP(in->leafDatum);
-
-	/* As above, in->reconstructedValue isn't toasted or short. */
-	if (DatumGetPointer(in->reconstructedValue))
-		reconstrValue = (text *) DatumGetPointer(in->reconstructedValue);
-
-	Assert(reconstrValue == NULL ? level == 0 :
-		   VARSIZE_ANY_EXHDR(reconstrValue) == level);
-
-	/* Reconstruct the full string represented by this leaf tuple */
-	fullLen = level + VARSIZE_ANY_EXHDR(leafValue);
-	if (VARSIZE_ANY_EXHDR(leafValue) == 0 && level > 0)
-	{
-		fullValue = VARDATA(reconstrValue);
-		out->leafValue = PointerGetDatum(reconstrValue);
-	}
-	else
-	{
-		text	   *fullText = palloc(VARHDRSZ + fullLen);
-
-		SET_VARSIZE(fullText, VARHDRSZ + fullLen);
-		fullValue = VARDATA(fullText);
-		if (level)
-			memcpy(fullValue, VARDATA(reconstrValue), level);
-		if (VARSIZE_ANY_EXHDR(leafValue) > 0)
-			memcpy(fullValue + level, VARDATA_ANY(leafValue),
-				   VARSIZE_ANY_EXHDR(leafValue));
-		out->leafValue = PointerGetDatum(fullText);
-	}
-
-	/* Perform the required comparison(s) */
-	res = true;
-	for (j = 0; j < in->nkeys; j++)
-	{
-		StrategyNumber strategy = in->scankeys[j].sk_strategy;
-		text	   *query = DatumGetTextPP(in->scankeys[j].sk_argument);
-		int			queryLen = VARSIZE_ANY_EXHDR(query);
-		int			r;
-
-		if (strategy == RTPrefixStrategyNumber)
-		{
-			/*
-			 * if level >= length of query then reconstrValue must begin with
-			 * query (prefix) string, so we don't need to check it again.
-			 */
-			res = (level >= queryLen) ||
-				DatumGetBool(DirectFunctionCall2Coll(text_starts_with,
-													 PG_GET_COLLATION(),
-													 out->leafValue,
-													 PointerGetDatum(query)));
-
-			if (!res)			/* no need to consider remaining conditions */
-				break;
-
-			continue;
-		}
-
-		if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
-		{
-			/* Collation-aware comparison */
-			strategy -= SPG_STRATEGY_ADDITION;
-
-			/* If asserts enabled, verify encoding of reconstructed string */
-			Assert(pg_verifymbstr(fullValue, fullLen, false));
-
-			r = varstr_cmp(fullValue, fullLen,
-						   VARDATA_ANY(query), queryLen,
-						   PG_GET_COLLATION());
-		}
-		else
-		{
-			/* Non-collation-aware comparison */
-			r = memcmp(fullValue, VARDATA_ANY(query), Min(queryLen, fullLen));
-
-			if (r == 0)
-			{
-				if (queryLen > fullLen)
-					r = -1;
-				else if (queryLen < fullLen)
-					r = 1;
-			}
-		}
-
-		switch (strategy)
-		{
-			case BTLessStrategyNumber:
-				res = (r < 0);
-				break;
-			case BTLessEqualStrategyNumber:
-				res = (r <= 0);
-				break;
-			case BTEqualStrategyNumber:
-				res = (r == 0);
-				break;
-			case BTGreaterEqualStrategyNumber:
-				res = (r >= 0);
-				break;
-			case BTGreaterStrategyNumber:
-				res = (r > 0);
-				break;
-			default:
-				elog(ERROR, "unrecognized strategy number: %d",
-					 in->scankeys[j].sk_strategy);
-				res = false;
-				break;
-		}
-
-		if (!res)
-			break;				/* no need to consider remaining conditions */
-	}
-
-	PG_RETURN_BOOL(res);
-}
+// Datum
+// spg_text_leaf_consistent(PG_FUNCTION_ARGS)
+// {
+// 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
+// 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
+// 	int			level = in->level;
+// 	text	   *leafValue,
+// 			   *reconstrValue = NULL;
+// 	char	   *fullValue;
+// 	int			fullLen;
+// 	bool		res;
+// 	int			j;
+// 
+// 	/* all tests are exact */
+// 	out->recheck = false;
+// 
+// 	leafValue = DatumGetTextPP(in->leafDatum);
+// 
+// 	/* As above, in->reconstructedValue isn't toasted or short. */
+// 	if (DatumGetPointer(in->reconstructedValue))
+// 		reconstrValue = (text *) DatumGetPointer(in->reconstructedValue);
+// 
+// 	Assert(reconstrValue == NULL ? level == 0 :
+// 		   VARSIZE_ANY_EXHDR(reconstrValue) == level);
+// 
+// 	/* Reconstruct the full string represented by this leaf tuple */
+// 	fullLen = level + VARSIZE_ANY_EXHDR(leafValue);
+// 	if (VARSIZE_ANY_EXHDR(leafValue) == 0 && level > 0)
+// 	{
+// 		fullValue = VARDATA(reconstrValue);
+// 		out->leafValue = PointerGetDatum(reconstrValue);
+// 	}
+// 	else
+// 	{
+// 		text	   *fullText = palloc(VARHDRSZ + fullLen);
+// 
+// 		SET_VARSIZE(fullText, VARHDRSZ + fullLen);
+// 		fullValue = VARDATA(fullText);
+// 		if (level)
+// 			memcpy(fullValue, VARDATA(reconstrValue), level);
+// 		if (VARSIZE_ANY_EXHDR(leafValue) > 0)
+// 			memcpy(fullValue + level, VARDATA_ANY(leafValue),
+// 				   VARSIZE_ANY_EXHDR(leafValue));
+// 		out->leafValue = PointerGetDatum(fullText);
+// 	}
+// 
+// 	/* Perform the required comparison(s) */
+// 	res = true;
+// 	for (j = 0; j < in->nkeys; j++)
+// 	{
+// 		StrategyNumber strategy = in->scankeys[j].sk_strategy;
+// 		text	   *query = DatumGetTextPP(in->scankeys[j].sk_argument);
+// 		int			queryLen = VARSIZE_ANY_EXHDR(query);
+// 		int			r;
+// 
+// 		if (strategy == RTPrefixStrategyNumber)
+// 		{
+// 			/*
+// 			 * if level >= length of query then reconstrValue must begin with
+// 			 * query (prefix) string, so we don't need to check it again.
+// 			 */
+// 			res = (level >= queryLen) ||
+// 				DatumGetBool(DirectFunctionCall2Coll(text_starts_with,
+// 													 PG_GET_COLLATION(),
+// 													 out->leafValue,
+// 													 PointerGetDatum(query)));
+// 
+// 			if (!res)			/* no need to consider remaining conditions */
+// 				break;
+// 
+// 			continue;
+// 		}
+// 
+// 		if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
+// 		{
+// 			/* Collation-aware comparison */
+// 			strategy -= SPG_STRATEGY_ADDITION;
+// 
+// 			/* If asserts enabled, verify encoding of reconstructed string */
+// 			Assert(pg_verifymbstr(fullValue, fullLen, false));
+// 
+// 			r = varstr_cmp(fullValue, fullLen,
+// 						   VARDATA_ANY(query), queryLen,
+// 						   PG_GET_COLLATION());
+// 		}
+// 		else
+// 		{
+// 			/* Non-collation-aware comparison */
+// 			r = memcmp(fullValue, VARDATA_ANY(query), Min(queryLen, fullLen));
+// 
+// 			if (r == 0)
+// 			{
+// 				if (queryLen > fullLen)
+// 					r = -1;
+// 				else if (queryLen < fullLen)
+// 					r = 1;
+// 			}
+// 		}
+// 
+// 		switch (strategy)
+// 		{
+// 			case BTLessStrategyNumber:
+// 				res = (r < 0);
+// 				break;
+// 			case BTLessEqualStrategyNumber:
+// 				res = (r <= 0);
+// 				break;
+// 			case BTEqualStrategyNumber:
+// 				res = (r == 0);
+// 				break;
+// 			case BTGreaterEqualStrategyNumber:
+// 				res = (r >= 0);
+// 				break;
+// 			case BTGreaterStrategyNumber:
+// 				res = (r > 0);
+// 				break;
+// 			default:
+// 				elog(ERROR, "unrecognized strategy number: %d",
+// 					 in->scankeys[j].sk_strategy);
+// 				res = false;
+// 				break;
+// 		}
+// 
+// 		if (!res)
+// 			break;				/* no need to consider remaining conditions */
+// 	}
+// 
+// 	PG_RETURN_BOOL(res);
+// }
