@@ -14,14 +14,19 @@
 
 
 
-void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length){
-
+// I expect that target and source are both initialized with the correct size
+void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length) {
+   
 }
 
 void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
-
+  int byte_index = index / 4;
+  int overflow = index % 4;
+  uint8_t shift = (6 - 2 * overflow);
+  uint8_t shifted_element = nodeBase << shift;
+  uint8_t cleaner = ~(BASE_MASK << shift);
+  data[byte_index] = (data[byte_index] & cleaner) | shifted_element;
 }
-
 
 inline size_t kmer_get_length(sequence* seq) {
     return seq_get_length(seq, KMER);
@@ -48,7 +53,7 @@ formSeqDatum(const uint8_t *data, int begin, int datalen)
 {
     sequence* seq;
     size_t num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
-    int overflow = begin % 4;
+    uint8_t overflow = begin % 4;
     data += (begin / 4);
     if(overflow == 0){
         seq = seq_create_sequence(data, datalen, num_bytes, KMER);
@@ -66,6 +71,16 @@ formSeqDatum(const uint8_t *data, int begin, int datalen)
         }
         seq = seq_create_sequence(new_data, datalen, num_bytes, KMER);
         pfree(new_data);
+    }
+
+    if ((overflow + datalen) % 4){ 
+        uint8_t cleaner = 0x0;
+        uint8_t i = 8 - 2 * (datalen % 4);
+        while(i <= 6) {
+            cleaner |= (BASE_MASK << i); 
+            i+=2;
+        }
+        seq->data[num_bytes-1] &= cleaner;
     }
 
 	return PointerGetDatum(seq);
