@@ -13,11 +13,6 @@ Datum kmer_length(PG_FUNCTION_ARGS)
     PG_RETURN_UINT32(kmer_length);
 }
 
-void seq_sequenceCopy2(uint8_t* target, uint8_t* source, int target_start, int length){
-   
-}
-
-
 PG_FUNCTION_INFO_V1(kmer_in);
 Datum kmer_in(PG_FUNCTION_ARGS) {
     char *str = PG_GETARG_CSTRING(0);
