@@ -296,14 +296,14 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
     int                  max_calls;
  
     sequence *dna = (sequence *)PG_GETARG_POINTER(0);
-    uint8_t k = PG_GETARG_INT32(1); // k (for generating k-mers)
+    size_t k = PG_GETARG_INT32(1); // k (for generating k-mers)
 
-    if (k>KMER_MAX_SIZE || k> seq_get_length(dna,0) || k<=0){
+    if (k>KMER_MAX_SIZE || k> seq_get_length(dna,DNA) || k<=0){
           ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
             errmsg("Invalid Kmer Length!")));  }
 
     size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(dna, DNA), k);
-    uint8_t data_bytes = seq_get_number_of_bytes_from_length(k, KMER);
+    size_t data_bytes = seq_get_number_of_bytes_from_length(k, KMER);
       
     if (SRF_IS_FIRSTCALL())
     {
