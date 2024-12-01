@@ -6,6 +6,7 @@
 #include "catalog/pg_type.h"
 #include "common/int.h"
 #include "mb/pg_wchar.h"
+#include "sequence.h"
 #include "utils/datum.h"
 #include "utils/fmgrprotos.h"
 #include "utils/pg_locale.h"
@@ -13,8 +14,14 @@
 
 
 
-void sequenceCopy(sequence* target, sequence* source, int target_start, int length){
+void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length){
+
 }
+
+void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
+
+}
+
 
 inline size_t kmer_get_length(sequence* seq) {
     return seq_get_length(seq, KMER);
@@ -345,272 +352,234 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-// PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
-// Datum
-// spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
-// {
-// 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
-// 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-// 	sequence	   *reconstructedValue;
-// 	sequence	   *reconstrSeq;
-// 	int			maxReconstrLen;
-// 	sequence	   *prefixSeq = NULL;
-// 	int			prefixLen = 0;
-//     int         prefixSize = 0;
-// 	int			i;
-// 
-// 	/*
-// 	 * Reconstruct values represented at this tuple, including parent data,
-// 	 * prefix of this tuple if any, and the node label if it's non-dummy.
-// 	 * in->level should be the length of the previously reconstructed value,
-// 	 * and the number of bytes added here is prefixLen or prefixLen + 1.
-// 	 *
-// 	 * Note: we assume that in->reconstructedValue isn't toasted and doesn't
-// 	 * have a short varlena header.  This is okay because it must have been
-// 	 * created by a previous invocation of this routine, and we always emit
-// 	 * long-format reconstructed values.
-// 	 */
-// 
-// 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
-// 	Assert(reconstructedValue == NULL ? in->level == 0 :
-// 		   seq_get_length(reconstructedValue) == in->level);
-// 
-// 	maxReconstrLen = in->level + 1;
-// 	if (in->hasPrefix)
-// 	{
-// 		prefixSeq = DatumGetSEQP(in->prefixDatum);
-// 		prefixLen = seq_get_length(prefixSeq);
-// 		maxReconstrLen += prefixLen;
-// 	}
-// 
-//     prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
-// 	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
-// 	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
-//     reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
-// 
-// 	if (in->level)
-//         sequenceCopy(reconstrSeq,
-//                      reconstructedValue,
-//                      0,
-//                      in->level);
-// 	if (prefixLen)
-// 		sequenceCopy(reconstrSeq,
-// 			   prefixSeq,
-//                in->level,
-// 			   prefixLen);
-// 	/* last byte of reconstrSeq will be filled in below */
-// 
-// 	/*
-// 	 * Scan the child nodes.  For each one, complete the reconstructed value
-// 	 * and see if it's consistent with the query.  If so, emit an entry into
-// 	 * the output arrays.
-// 	 */
-// 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
-// 	out->levelAdds = (int *) palloc(sizeof(int) * in->nNodes);
-// 	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
-// 	out->nNodes = 0;
-// 
-// 	for (i = 0; i < in->nNodes; i++)
-// 	{
-// 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
-// 		int			thisLen;
-// 		bool		res = true;
-// 		int			j;
-// 
-// 		/* If nodeChar is a dummy value, don't include it in data */
-// 		if (nodeChar <= 0)
-// 			thisLen = maxReconstrLen - 1;
-// 		else
-// 		{
-// 			((unsigned char *) VARDATA(reconstrSeq))[maxReconstrLen - 1] = nodeChar;
-// 			thisLen = maxReconstrLen;
-// 		}
-// 
-// 		for (j = 0; j < in->nkeys; j++)
-// 		{
-// 			StrategyNumber strategy = in->scankeys[j].sk_strategy;
-// 			sequence	   *inSeq;
-// 			int			inLen;
-// 			int			r;
-// 
-// 
-// 			inSeq = DatumGetTextPP(in->scankeys[j].sk_argument);
-// 			inLen = VARSIZE_ANY_EXHDR(inSeq);
-// 
-// 			r = memcmp(VARDATA(reconstrSeq), VARDATA_ANY(inSeq),
-// 					   Min(inLen, thisLen));
-// 
-// 			switch (strategy)
-// 			{
-// 				case BTLessStrategyNumber:
-// 				case BTLessEqualStrategyNumber:
-// 					if (r > 0)
-// 						res = false;
-// 					break;
-// 				case BTEqualStrategyNumber:
-// 					if (r != 0 || inLen < thisLen)
-// 						res = false;
-// 					break;
-// 				case BTGreaterEqualStrategyNumber:
-// 				case BTGreaterStrategyNumber:
-// 					if (r < 0)
-// 						res = false;
-// 					break;
-// 				case RTPrefixStrategyNumber:
-// 					if (r != 0)
-// 						res = false;
-// 					break;
-// 				default:
-// 					elog(ERROR, "unrecognized strategy number: %d",
-// 						 in->scankeys[j].sk_strategy);
-// 					break;
-// 			}
-// 
-// 			if (!res)
-// 				break;			/* no need to consider remaining conditions */
-// 		}
-// 
-// 		if (res)
-// 		{
-// 			out->nodeNumbers[out->nNodes] = i;
-// 			out->levelAdds[out->nNodes] = thisLen - in->level;
-// 			SET_VARSIZE(reconstrSeq, VARHDRSZ + thisLen);
-// 			out->reconstructedValues[out->nNodes] =
-// 				datumCopy(PointerGetDatum(reconstrSeq), false, -1);
-// 			out->nNodes++;
-// 		}
-// 	}
-// 
-// 	PG_RETURN_VOID();
-// }
+PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
+Datum
+spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
+{
+	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
+	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
+	sequence	   *reconstructedValue;
+	sequence	   *reconstrSeq;
+	int			maxReconstrLen;
+	sequence	   *prefixSeq = NULL;
+	int			prefixLen = 0;
+    int         prefixSize = 0;
+	int			i;
 
-// PG_FUNCTION_INFO_V1(spg_text_leaf_consistent);
-// Datum
-// spg_text_leaf_consistent(PG_FUNCTION_ARGS)
-// {
-// 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
-// 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
-// 	int			level = in->level;
-// 	text	   *leafValue,
-// 			   *reconstrValue = NULL;
-// 	char	   *fullValue;
-// 	int			fullLen;
-// 	bool		res;
-// 	int			j;
-// 
-// 	/* all tests are exact */
-// 	out->recheck = false;
-// 
-// 	leafValue = DatumGetTextPP(in->leafDatum);
-// 
-// 	/* As above, in->reconstructedValue isn't toasted or short. */
-// 	if (DatumGetPointer(in->reconstructedValue))
-// 		reconstrValue = (text *) DatumGetPointer(in->reconstructedValue);
-// 
-// 	Assert(reconstrValue == NULL ? level == 0 :
-// 		   VARSIZE_ANY_EXHDR(reconstrValue) == level);
-// 
-// 	/* Reconstruct the full string represented by this leaf tuple */
-// 	fullLen = level + VARSIZE_ANY_EXHDR(leafValue);
-// 	if (VARSIZE_ANY_EXHDR(leafValue) == 0 && level > 0)
-// 	{
-// 		fullValue = VARDATA(reconstrValue);
-// 		out->leafValue = PointerGetDatum(reconstrValue);
-// 	}
-// 	else
-// 	{
-// 		text	   *fullText = palloc(VARHDRSZ + fullLen);
-// 
-// 		SET_VARSIZE(fullText, VARHDRSZ + fullLen);
-// 		fullValue = VARDATA(fullText);
-// 		if (level)
-// 			memcpy(fullValue, VARDATA(reconstrValue), level);
-// 		if (VARSIZE_ANY_EXHDR(leafValue) > 0)
-// 			memcpy(fullValue + level, VARDATA_ANY(leafValue),
-// 				   VARSIZE_ANY_EXHDR(leafValue));
-// 		out->leafValue = PointerGetDatum(fullText);
-// 	}
-// 
-// 	/* Perform the required comparison(s) */
-// 	res = true;
-// 	for (j = 0; j < in->nkeys; j++)
-// 	{
-// 		StrategyNumber strategy = in->scankeys[j].sk_strategy;
-// 		text	   *query = DatumGetTextPP(in->scankeys[j].sk_argument);
-// 		int			queryLen = VARSIZE_ANY_EXHDR(query);
-// 		int			r;
-// 
-// 		if (strategy == RTPrefixStrategyNumber)
-// 		{
-// 			/*
-// 			 * if level >= length of query then reconstrValue must begin with
-// 			 * query (prefix) string, so we don't need to check it again.
-// 			 */
-// 			res = (level >= queryLen) ||
-// 				DatumGetBool(DirectFunctionCall2Coll(text_starts_with,
-// 													 PG_GET_COLLATION(),
-// 													 out->leafValue,
-// 													 PointerGetDatum(query)));
-// 
-// 			if (!res)			/* no need to consider remaining conditions */
-// 				break;
-// 
-// 			continue;
-// 		}
-// 
-// 		if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
-// 		{
-// 			/* Collation-aware comparison */
-// 			strategy -= SPG_STRATEGY_ADDITION;
-// 
-// 			/* If asserts enabled, verify encoding of reconstructed string */
-// 			Assert(pg_verifymbstr(fullValue, fullLen, false));
-// 
-// 			r = varstr_cmp(fullValue, fullLen,
-// 						   VARDATA_ANY(query), queryLen,
-// 						   PG_GET_COLLATION());
-// 		}
-// 		else
-// 		{
-// 			/* Non-collation-aware comparison */
-// 			r = memcmp(fullValue, VARDATA_ANY(query), Min(queryLen, fullLen));
-// 
-// 			if (r == 0)
-// 			{
-// 				if (queryLen > fullLen)
-// 					r = -1;
-// 				else if (queryLen < fullLen)
-// 					r = 1;
-// 			}
-// 		}
-// 
-// 		switch (strategy)
-// 		{
-// 			case BTLessStrategyNumber:
-// 				res = (r < 0);
-// 				break;
-// 			case BTLessEqualStrategyNumber:
-// 				res = (r <= 0);
-// 				break;
-// 			case BTEqualStrategyNumber:
-// 				res = (r == 0);
-// 				break;
-// 			case BTGreaterEqualStrategyNumber:
-// 				res = (r >= 0);
-// 				break;
-// 			case BTGreaterStrategyNumber:
-// 				res = (r > 0);
-// 				break;
-// 			default:
-// 				elog(ERROR, "unrecognized strategy number: %d",
-// 					 in->scankeys[j].sk_strategy);
-// 				res = false;
-// 				break;
-// 		}
-// 
-// 		if (!res)
-// 			break;				/* no need to consider remaining conditions */
-// 	}
-// 
-// 	PG_RETURN_BOOL(res);
-// }
+	/*
+	 * Reconstruct values represented at this tuple, including parent data,
+	 * prefix of this tuple if any, and the node label if it's non-dummy.
+	 * in->level should be the length of the previously reconstructed value,
+	 * and the number of bytes added here is prefixLen or prefixLen + 1.
+	 *
+	 * Note: we assume that in->reconstructedValue isn't toasted and doesn't
+	 * have a short varlena header.  This is okay because it must have been
+	 * created by a previous invocation of this routine, and we always emit
+	 * long-format reconstructed values.
+	 */
+
+	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
+	Assert(reconstructedValue == NULL ? in->level == 0 :
+		   kmer_get_length(reconstructedValue) == in->level);
+
+	maxReconstrLen = in->level + 1;
+	if (in->hasPrefix)
+	{
+		prefixSeq = DatumGetSEQP(in->prefixDatum);
+		prefixLen = kmer_get_length(prefixSeq);
+		maxReconstrLen += prefixLen;
+	}
+
+    prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
+	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
+	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
+    reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
+
+	if (in->level)
+        sequenceCopy(reconstrSeq->data,
+                     reconstructedValue->data,
+                     0,
+                     in->level);
+	if (prefixLen)
+		sequenceCopy(reconstrSeq->data,
+			   prefixSeq->data,
+               in->level,
+			   prefixLen);
+	/* last byte of reconstrSeq will be filled in below */
+
+	/*
+	 * Scan the child nodes.  For each one, complete the reconstructed value
+	 * and see if it's consistent with the query.  If so, emit an entry into
+	 * the output arrays.
+	 */
+	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
+	out->levelAdds = (int *) palloc(sizeof(int) * in->nNodes);
+	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
+	out->nNodes = 0;
+
+	for (i = 0; i < in->nNodes; i++)
+	{
+		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
+		int			thisLen;
+        int         thisSize;
+		bool		res = true;
+		int			j;
+
+		/* If nodeChar is a dummy value, don't include it in data */
+		if (nodeChar <= 0)
+			thisLen = maxReconstrLen - 1;
+		else
+		{
+            set_base_at_index(reconstrSeq->data, maxReconstrLen - 1, nodeChar);
+			thisLen = maxReconstrLen;
+		}
+
+        thisSize = seq_get_number_of_bytes_from_length(thisLen, KMER);
+
+		for (j = 0; j < in->nkeys; j++)
+		{
+			StrategyNumber strategy = in->scankeys[j].sk_strategy;
+			sequence	   *inSeq;
+			int			inLen;
+			int			r;
+
+
+			inSeq = DatumGetSEQP(in->scankeys[j].sk_argument);
+			inLen = kmer_get_length(inSeq);
+
+            int commonLen = commonPrefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
+            int minLen = Min(inLen, thisLen);
+
+			switch (strategy)
+			{
+				case EqualStrategyNumber:
+					if (commonLen != minLen - 1 || inLen < thisLen)
+						res = false;
+					break;
+				case PrefixStrategyNumber:
+					if (commonLen != minLen - 1)
+						res = false;
+					break;
+                // case ContainStrategyNumber:
+                //     break;
+				default:
+					elog(ERROR, "unrecognized strategy number: %d",
+						 in->scankeys[j].sk_strategy);
+					break;
+			}
+
+			if (!res)
+				break;			/* no need to consider remaining conditions */
+		}
+
+		if (res)
+		{
+			out->nodeNumbers[out->nNodes] = i;
+			out->levelAdds[out->nNodes] = thisLen - in->level;
+			SET_VARSIZE(reconstrSeq, sizeof(sequence) + thisSize);
+			out->reconstructedValues[out->nNodes] =
+				datumCopy(PointerGetDatum(reconstrSeq), false, -1);
+			out->nNodes++;
+		}
+	}
+
+	PG_RETURN_VOID();
+}
+
+PG_FUNCTION_INFO_V1(spg_sequence_leaf_consistent);
+Datum
+spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
+{
+	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
+	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
+	int			level = in->level;
+	sequence	   *leafValue,
+			   *reconstrValue = NULL;
+	uint8_t	   *fullValue;
+	int			fullLen;
+    int         fullSize;
+	bool		res;
+	int			j;
+
+	/* all tests are exact */
+	out->recheck = false;
+
+	leafValue = DatumGetSEQP(in->leafDatum);
+
+	/* As above, in->reconstructedValue isn't toasted or short. */
+	if (DatumGetPointer(in->reconstructedValue))
+		reconstrValue = (sequence *) DatumGetPointer(in->reconstructedValue);
+
+	Assert(reconstrValue == NULL ? level == 0 :
+		   kmer_get_length(reconstrValue) == level);
+
+	/* Reconstruct the full string represented by this leaf tuple */
+	fullLen = level + kmer_get_length(leafValue);
+    fullSize = seq_get_number_of_bytes_from_length(fullLen, KMER);
+	if (kmer_get_length(leafValue) == 0 && level > 0)
+	{
+		fullValue = reconstrValue->data;
+		out->leafValue = PointerGetDatum(reconstrValue);
+	}
+	else
+	{
+		sequence	   *fullSeq = palloc(VARHDRSZ + fullLen);
+
+		SET_VARSIZE(fullSeq, VARHDRSZ + fullSize);
+		fullValue = fullSeq->data;
+		if (level)
+            sequenceCopy(fullValue, reconstrValue->data, 0, level);
+		if (kmer_get_length(leafValue) > 0)
+            sequenceCopy(fullValue, leafValue->data, level, kmer_get_length(leafValue));
+		out->leafValue = PointerGetDatum(fullSeq);
+	}
+
+	/* Perform the required comparison(s) */
+	res = true;
+	for (j = 0; j < in->nkeys; j++)
+	{
+		StrategyNumber strategy = in->scankeys[j].sk_strategy;
+		sequence	   *query = DatumGetSEQP(in->scankeys[j].sk_argument);
+		int			queryLen = kmer_get_length(query);
+		int			r;
+
+		if (strategy == PrefixStrategyNumber)
+		{
+			/*
+			 * if level >= length of query then reconstrValue must begin with
+			 * query (prefix) string, so we don't need to check it again.
+			 */
+            // Wait for starts_with function
+			// res = (level >= queryLen) ||
+			// 	DatumGetBool(DirectFunctionCall2Coll(starts_with,
+			// 										 out->leafValue,
+			// 										 PointerGetDatum(query)));
+
+			if (!res)			/* no need to consider remaining conditions */
+				break;
+
+			continue;
+		}
+
+        int commonIndex = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
+
+		switch (strategy)
+		{
+			case EqualStrategyNumber:
+				res = ((commonIndex == fullLen - 1) && (commonIndex == queryLen - 1));
+				break;
+            // case ContainStrategyNumber:
+            //     break;
+			default:
+				elog(ERROR, "unrecognized strategy number: %d",
+					 in->scankeys[j].sk_strategy);
+				res = false;
+				break;
+		}
+
+		if (!res)
+			break;				/* no need to consider remaining conditions */
+	}
+
+	PG_RETURN_BOOL(res);
+}

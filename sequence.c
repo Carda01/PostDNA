@@ -59,7 +59,7 @@ size_t seq_get_length(sequence* seq, int type){
   return (VARSIZE(seq) - sizeof(sequence) - sizeof(uint8_t)) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
 }
 
-inline uint8_t seq_get_overflow(size_t seq_length, int type) {
+uint8_t seq_get_overflow(size_t seq_length, int type) {
     return seq_length % (seq_bases_per_byte(type));
 }
 

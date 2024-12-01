@@ -18,7 +18,8 @@ typedef struct spgNodePtr
 } spgNodePtr;
 
 
-void sequenceCopy(sequence* target, sequence* source, int target_start, int length);
+void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length);
+void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase);
 inline size_t kmer_get_length(sequence* seq);
 inline uint8_t get_base_at_index(const uint8_t* data, int index);
 
