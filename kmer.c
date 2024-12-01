@@ -9,7 +9,7 @@ PG_FUNCTION_INFO_V1(kmer_length);
 Datum kmer_length(PG_FUNCTION_ARGS)
 {
     sequence *kmer = (sequence *)PG_GETARG_POINTER(0);
-    uint8_t kmer_length = seq_get_length(kmer, KMER);  // Get the length of the kmer sequence
+    size_t kmer_length = seq_get_length(kmer, KMER);  // Get the length of the kmer sequence
     PG_RETURN_UINT32(kmer_length);
 }
 
