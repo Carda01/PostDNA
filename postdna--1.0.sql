@@ -238,23 +238,22 @@ CREATE OR REPLACE FUNCTION spg_sequence_picksplit(internal, internal)
 	RETURNS void
 	AS 'MODULE_PATHNAME'
 	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE OR REPLACE FUNCTION spg_sequence_inner_consistent(internal, internal)
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE OR REPLACE FUNCTION spg_sequence_leaf_consistent(internal, internal)
+	RETURNS bool
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
--- CREATE OR REPLACE FUNCTION spg_kmer_inner_consistent(internal, internal)
--- 	RETURNS void
--- 	AS 'MODULE_PATHNAME'
--- 	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
--- CREATE OR REPLACE FUNCTION spg_kmer_leaf_consistent(internal, internal)
--- 	RETURNS bool
--- 	AS 'MODULE_PATHNAME'
--- 	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
--- CREATE OPERATOR CLASS spg_kmer_ops
--- 	FOR TYPE kmer USING SPGIST AS
---         OPERATOR        1       = ,
---         OPERATOR        2       ^@ ,
---         OPERATOR        3       @> ,
---         FUNCTION        1       spg_kmer_config(internal, internal),
---         FUNCTION        2       spg_kmer_choose(internal, internal),
---         FUNCTION        3       spg_kmer_picksplit(internal, internal),
---         FUNCTION        4       spg_kmer_inner_consistent(internal, internal),
---         FUNCTION        5       spg_kmer_leaf_consistent(internal, internal);
+CREATE OPERATOR CLASS spg_kmer_ops
+	FOR TYPE kmer USING SPGIST AS
+        OPERATOR        1       = ,
+        --OPERATOR        2       ^@ ,
+        --OPERATOR        3       @> ,
+        FUNCTION        1       spg_sequence_config(internal, internal),
+        FUNCTION        2       spg_sequence_choose(internal, internal),
+        FUNCTION        3       spg_sequence_picksplit(internal, internal),
+        FUNCTION        4       spg_sequence_inner_consistent(internal, internal),
+        FUNCTION        5       spg_sequence_leaf_consistent(internal, internal);
