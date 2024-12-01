@@ -7,16 +7,49 @@
 #include "common/int.h"
 #include "mb/pg_wchar.h"
 #include "sequence.h"
+#include "postgres.h"
 #include "utils/datum.h"
 #include "utils/fmgrprotos.h"
 #include "utils/pg_locale.h"
 #include "utils/varlena.h"
 
 
+void logSeq(sequence *seq) {
+    if(seq == NULL){
+        elog(DEBUG1, "pointer is NULL");
+    }
+    else {
+        elog(DEBUG1, "sequence: %s", seq_sequence_to_string(seq, KMER));
+    }
+}
 
-// I expect that target and source are both initialized with the correct size
+
 void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length) {
-   
+    int data_bytes = length / 4;
+    int overflow = length % 4;
+    int start_byte = target_start / 4;
+    int start_overflow = target_start % 4;
+    int bits_copied = 0;
+    for (int i = 0; bits_copied < length; i++) {
+        target[start_byte + i] |= source[i] >> (start_overflow * 2);
+        bits_copied += 4 - start_overflow;
+        if(bits_copied < length) {
+            target[start_byte + i + 1] |= source[i] << ((4 - start_overflow) * 2);
+            bits_copied += start_overflow;
+        }
+    }
+    
+    int final_length = target_start + 1 + length;
+    int final_size = seq_get_number_of_bytes_from_length(final_length, KMER);
+    if ((final_length) % 4){ 
+        uint8_t cleaner = 0x0;
+        uint8_t i = 8 - 2 * (final_length % 4);
+        while(i <= 6) {
+            cleaner |= (BASE_MASK << i); 
+            i+=2;
+        }
+        target[final_size - 1] &= cleaner;
+    }
 }
 
 void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
@@ -52,7 +85,7 @@ static Datum
 formSeqDatum(const uint8_t *data, int begin, int datalen)
 {
     sequence* seq;
-    size_t num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
+    int num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
     uint8_t overflow = begin % 4;
     data += (begin / 4);
     if(overflow == 0){
@@ -73,7 +106,7 @@ formSeqDatum(const uint8_t *data, int begin, int datalen)
         pfree(new_data);
     }
 
-    if ((overflow + datalen) % 4){ 
+    if (datalen % 4){ 
         uint8_t cleaner = 0x0;
         uint8_t i = 8 - 2 * (datalen % 4);
         while(i <= 6) {
@@ -108,9 +141,9 @@ commonPrefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb)
  * On success, *i gets the match location; on failure, it gets where to insert
  */
 static bool
-searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
+searchBase(Datum *nodeLabels, int nNodes, int16 c, int *i)
 {
-    i = 0;
+    *i = 0;
     while(*i < nNodes) {
         if(c == nodeLabels[*i]) {
             return true;
@@ -124,6 +157,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_config);
 Datum
 spg_sequence_config(PG_FUNCTION_ARGS)
 {
+    elog(DEBUG1, "config");
 	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
@@ -138,6 +172,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_choose);
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
 {
+    //elog(DEBUG1, "choose");
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	sequence	   *inSeq = DatumGetSEQP(in->datum);
@@ -219,7 +254,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	}
 
 	/* Look up nodeBase in the node label array */
-	if (searchChar(in->nodeLabels, in->nNodes, nodeBase, &i))
+	if (searchBase(in->nodeLabels, in->nNodes, nodeBase, &i))
 	{
 		/*
 		 * Descend to existing node.  (If in->allTheSame, the core code will
@@ -279,10 +314,33 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 }
 
 
+int compare_int(int a, int b){
+    if(a == b){
+        return 0;
+    }
+    else if(a > b){
+        return 1;
+    }
+    else 
+        return -1;
+}
+
+/* qsort comparator to sort spgNodePtr structs by "c" */
+static int
+cmpNodePtr(const void *a, const void *b)
+{
+	const spgNodePtr *aa = (const spgNodePtr *) a;
+	const spgNodePtr *bb = (const spgNodePtr *) b;
+
+	return compare_int(aa->c, bb->c);
+}
+
+
 PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
 spg_sequence_picksplit(PG_FUNCTION_ARGS)
 {
+    elog(DEBUG1, "picksplit");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
 	sequence	   *seq0 = DatumGetSEQP(in->datums[0]);
@@ -292,6 +350,8 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
+    elog(DEBUG1, "commonLen: %d", commonLen);
+
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
@@ -304,12 +364,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		if (tmp < commonLen)
 			commonLen = tmp;
 	}
-
-	/*
-	 * Limit the prefix length, if necessary, to ensure that the resulting
-	 * inner tuple will fit on a page.
-	 */
-	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
+    elog(DEBUG1, "commonLen: %d", commonLen);
 
 	/* Set node prefix to be that string, if it's not empty */
 	if (commonLen == 0)
@@ -329,13 +384,17 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
 
-		if (commonLen < kmer_get_length(seqi))
+		if (commonLen < kmer_get_length(seqi)){
 			nodes[i].c = get_base_at_index(seqi->data, commonLen);
-		else
+        }
+		else{
 			nodes[i].c = -1;	/* use -1 if string is all common */
+        }
 		nodes[i].i = i;
 		nodes[i].d = in->datums[i];
 	}
+
+	qsort(nodes, in->nTuples, sizeof(*nodes), cmpNodePtr);
 
 	/* And emit results */
 	out->nNodes = 0;
@@ -346,6 +405,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	for (i = 0; i < in->nTuples; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(nodes[i].d);
+        // logSeq(nodes[i].d);
 		Datum		leafD;
 
 		if (i == 0 || nodes[i].c != nodes[i - 1].c)
@@ -355,11 +415,14 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		}
 
 		if (commonLen < kmer_get_length(seqi))
-			leafD = formSeqDatum(seqi->data, commonLen + 1,
-								  kmer_get_length(seqi) - commonLen - 1);
+			leafD = formSeqDatum(seqi->data, 
+                                 commonLen + 1,
+								 kmer_get_length(seqi) - commonLen - 1);
 		else
 			leafD = formSeqDatum(NULL, 0, 0); // TODO: check if it works when passing null
 
+        // logSeq(leafD);
+        // elog(DEBUG1, "nNodes: %d", out->nNodes);
 		out->leafTupleDatums[nodes[i].i] = leafD;
 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
 	}
@@ -371,6 +434,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
 Datum
 spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 {
+    elog(DEBUG1, "inner_consistent");
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	sequence	   *reconstructedValue;
@@ -394,18 +458,21 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	 */
 
 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
+    logSeq(reconstructedValue);
 	Assert(reconstructedValue == NULL ? in->level == 0 :
 		   kmer_get_length(reconstructedValue) == in->level);
 
 	maxReconstrLen = in->level + 1;
+    elog(DEBUG1, "maxReconstrLen: %d", maxReconstrLen);
+    elog(DEBUG1, "hasPrefix: %d", in->hasPrefix);
 	if (in->hasPrefix)
 	{
 		prefixSeq = DatumGetSEQP(in->prefixDatum);
 		prefixLen = kmer_get_length(prefixSeq);
+        prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
 		maxReconstrLen += prefixLen;
 	}
 
-    prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
 	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
 	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
     reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
@@ -432,16 +499,19 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
 	out->nNodes = 0;
 
+    
+    elog(DEBUG1, "in->nNodes: %d", in->nNodes);
 	for (i = 0; i < in->nNodes; i++)
 	{
 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
+        elog(DEBUG1, "nodeChar: %d", nodeChar);
 		int			thisLen;
         int         thisSize;
 		bool		res = true;
 		int			j;
 
 		/* If nodeChar is a dummy value, don't include it in data */
-		if (nodeChar <= 0)
+		if (nodeChar < 0)
 			thisLen = maxReconstrLen - 1;
 		else
 		{
@@ -505,6 +575,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_leaf_consistent);
 Datum
 spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 {
+    // elog(DEBUG1, "leaf_consistent");
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
 	int			level = in->level;

@@ -201,7 +201,7 @@ CREATE OPERATOR <> (
 
 COMMENT ON OPERATOR <>(kmer,kmer) IS 'not equals?';
 
-CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
+CREATE OPERATOR CLASS kmer_ops FOR TYPE kmer USING hash AS
     OPERATOR 1 = (kmer, kmer),
     FUNCTION 1 kmer_hash(kmer);
 
@@ -286,11 +286,10 @@ CREATE OR REPLACE FUNCTION spg_sequence_leaf_consistent(internal, internal)
 	AS 'MODULE_PATHNAME'
 	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-CREATE OPERATOR CLASS spg_kmer_ops
-	FOR TYPE kmer USING SPGIST AS
+CREATE OPERATOR CLASS spg_kmer_ops DEFAULT FOR TYPE kmer USING SPGIST AS
         OPERATOR        1       = ,
-        --OPERATOR        2       ^@ ,
-        --OPERATOR        3       @> ,
+        OPERATOR        2       ^@,
+        -- OPERATOR        3       @>,
         FUNCTION        1       spg_sequence_config(internal, internal),
         FUNCTION        2       spg_sequence_choose(internal, internal),
         FUNCTION        3       spg_sequence_picksplit(internal, internal),
