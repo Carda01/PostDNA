@@ -1,4 +1,4 @@
-#include "sequence.h"
+#include "spgistkmer.h"
 
 // TODO: see which includes can be removed
 
@@ -12,32 +12,8 @@
 #include "utils/varlena.h"
 
 
-/*
- * Max prefix length in bytes is 8, as the longest kmer we can have has length 
- * 32. And because every byte can contain up to 4 bases, 32/4 = 8
- */
-#define SPGIST_MAX_PREFIX_LENGTH 8
 
-/* Struct for sorting values in picksplit */
-typedef struct spgNodePtr
-{
-	Datum		d;
-	int			i;
-	int16		c;
-} spgNodePtr;
-
-
-Datum
-spg_sequence_config(PG_FUNCTION_ARGS)
-{
-	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
-	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
-
-	cfg->prefixType = cfgin->attType;
-	cfg->labelType = INT2OID;
-	cfg->canReturnData = true;
-	cfg->longValuesOK = false;	/* max len is 32 */
-	PG_RETURN_VOID();
+void sequenceCopy(sequence* target, sequence* source, int target_start, int length){
 }
 
 inline size_t kmer_get_length(sequence* seq) {
@@ -122,6 +98,21 @@ searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
 	return false;
 }
 
+PG_FUNCTION_INFO_V1(spg_sequence_config);
+Datum
+spg_sequence_config(PG_FUNCTION_ARGS)
+{
+	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
+	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
+
+	cfg->prefixType = cfgin->attType;
+	cfg->labelType = INT2OID;
+	cfg->canReturnData = true;
+	cfg->longValuesOK = false;	/* max len is 32 */
+	PG_RETURN_VOID();
+}
+
+PG_FUNCTION_INFO_V1(spg_sequence_choose);
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
 {
@@ -266,8 +257,9 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 }
 
 
+PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
-spg_text_picksplit(PG_FUNCTION_ARGS)
+spg_sequence_picksplit(PG_FUNCTION_ARGS)
 {
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
@@ -353,54 +345,60 @@ spg_text_picksplit(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+// PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
 // Datum
-// spg_text_inner_consistent(PG_FUNCTION_ARGS)
+// spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 // {
 // 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 // 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-// 	bool		collate_is_c = pg_newlocale_from_collation(PG_GET_COLLATION())->collate_is_c;
-// 	text	   *reconstructedValue;
-// 	text	   *reconstrText;
+// 	sequence	   *reconstructedValue;
+// 	sequence	   *reconstrSeq;
 // 	int			maxReconstrLen;
-// 	text	   *prefixText = NULL;
-// 	int			prefixSize = 0;
+// 	sequence	   *prefixSeq = NULL;
+// 	int			prefixLen = 0;
+//     int         prefixSize = 0;
 // 	int			i;
 // 
 // 	/*
 // 	 * Reconstruct values represented at this tuple, including parent data,
 // 	 * prefix of this tuple if any, and the node label if it's non-dummy.
 // 	 * in->level should be the length of the previously reconstructed value,
-// 	 * and the number of bytes added here is prefixSize or prefixSize + 1.
+// 	 * and the number of bytes added here is prefixLen or prefixLen + 1.
 // 	 *
 // 	 * Note: we assume that in->reconstructedValue isn't toasted and doesn't
 // 	 * have a short varlena header.  This is okay because it must have been
 // 	 * created by a previous invocation of this routine, and we always emit
 // 	 * long-format reconstructed values.
 // 	 */
-// 	reconstructedValue = (text *) DatumGetPointer(in->reconstructedValue);
+// 
+// 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
 // 	Assert(reconstructedValue == NULL ? in->level == 0 :
-// 		   VARSIZE_ANY_EXHDR(reconstructedValue) == in->level);
+// 		   seq_get_length(reconstructedValue) == in->level);
 // 
 // 	maxReconstrLen = in->level + 1;
 // 	if (in->hasPrefix)
 // 	{
-// 		prefixText = DatumGetTextPP(in->prefixDatum);
-// 		prefixSize = VARSIZE_ANY_EXHDR(prefixText);
-// 		maxReconstrLen += prefixSize;
+// 		prefixSeq = DatumGetSEQP(in->prefixDatum);
+// 		prefixLen = seq_get_length(prefixSeq);
+// 		maxReconstrLen += prefixLen;
 // 	}
 // 
-// 	reconstrText = palloc(VARHDRSZ + maxReconstrLen);
-// 	SET_VARSIZE(reconstrText, VARHDRSZ + maxReconstrLen);
+//     prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
+// 	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
+// 	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
+//     reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
 // 
 // 	if (in->level)
-// 		memcpy(VARDATA(reconstrText),
-// 			   VARDATA(reconstructedValue),
-// 			   in->level);
-// 	if (prefixSize)
-// 		memcpy(((char *) VARDATA(reconstrText)) + in->level,
-// 			   VARDATA_ANY(prefixText),
-// 			   prefixSize);
-// 	/* last byte of reconstrText will be filled in below */
+//         sequenceCopy(reconstrSeq,
+//                      reconstructedValue,
+//                      0,
+//                      in->level);
+// 	if (prefixLen)
+// 		sequenceCopy(reconstrSeq,
+// 			   prefixSeq,
+//                in->level,
+// 			   prefixLen);
+// 	/* last byte of reconstrSeq will be filled in below */
 // 
 // 	/*
 // 	 * Scan the child nodes.  For each one, complete the reconstructed value
@@ -424,38 +422,23 @@ spg_text_picksplit(PG_FUNCTION_ARGS)
 // 			thisLen = maxReconstrLen - 1;
 // 		else
 // 		{
-// 			((unsigned char *) VARDATA(reconstrText))[maxReconstrLen - 1] = nodeChar;
+// 			((unsigned char *) VARDATA(reconstrSeq))[maxReconstrLen - 1] = nodeChar;
 // 			thisLen = maxReconstrLen;
 // 		}
 // 
 // 		for (j = 0; j < in->nkeys; j++)
 // 		{
 // 			StrategyNumber strategy = in->scankeys[j].sk_strategy;
-// 			text	   *inText;
-// 			int			inSize;
+// 			sequence	   *inSeq;
+// 			int			inLen;
 // 			int			r;
 // 
-// 			/*
-// 			 * If it's a collation-aware operator, but the collation is C, we
-// 			 * can treat it as non-collation-aware.  With non-C collation we
-// 			 * need to traverse whole tree :-( so there's no point in making
-// 			 * any check here.  (Note also that our reconstructed value may
-// 			 * well end with a partial multibyte character, so that applying
-// 			 * any encoding-sensitive test to it would be risky anyhow.)
-// 			 */
-// 			if (SPG_IS_COLLATION_AWARE_STRATEGY(strategy))
-// 			{
-// 				if (collate_is_c)
-// 					strategy -= SPG_STRATEGY_ADDITION;
-// 				else
-// 					continue;
-// 			}
 // 
-// 			inText = DatumGetTextPP(in->scankeys[j].sk_argument);
-// 			inSize = VARSIZE_ANY_EXHDR(inText);
+// 			inSeq = DatumGetTextPP(in->scankeys[j].sk_argument);
+// 			inLen = VARSIZE_ANY_EXHDR(inSeq);
 // 
-// 			r = memcmp(VARDATA(reconstrText), VARDATA_ANY(inText),
-// 					   Min(inSize, thisLen));
+// 			r = memcmp(VARDATA(reconstrSeq), VARDATA_ANY(inSeq),
+// 					   Min(inLen, thisLen));
 // 
 // 			switch (strategy)
 // 			{
@@ -465,7 +448,7 @@ spg_text_picksplit(PG_FUNCTION_ARGS)
 // 						res = false;
 // 					break;
 // 				case BTEqualStrategyNumber:
-// 					if (r != 0 || inSize < thisLen)
+// 					if (r != 0 || inLen < thisLen)
 // 						res = false;
 // 					break;
 // 				case BTGreaterEqualStrategyNumber:
@@ -491,9 +474,9 @@ spg_text_picksplit(PG_FUNCTION_ARGS)
 // 		{
 // 			out->nodeNumbers[out->nNodes] = i;
 // 			out->levelAdds[out->nNodes] = thisLen - in->level;
-// 			SET_VARSIZE(reconstrText, VARHDRSZ + thisLen);
+// 			SET_VARSIZE(reconstrSeq, VARHDRSZ + thisLen);
 // 			out->reconstructedValues[out->nNodes] =
-// 				datumCopy(PointerGetDatum(reconstrText), false, -1);
+// 				datumCopy(PointerGetDatum(reconstrSeq), false, -1);
 // 			out->nNodes++;
 // 		}
 // 	}
@@ -501,6 +484,7 @@ spg_text_picksplit(PG_FUNCTION_ARGS)
 // 	PG_RETURN_VOID();
 // }
 
+// PG_FUNCTION_INFO_V1(spg_text_leaf_consistent);
 // Datum
 // spg_text_leaf_consistent(PG_FUNCTION_ARGS)
 // {

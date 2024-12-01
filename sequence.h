@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef SEQUENCE_H
+#define SEQUENCE_H
 
 #include "postgres.h"
 #include <stdlib.h>
@@ -38,6 +38,12 @@ enum {
   DNA = 0,
   KMER = 1,
   QKMER = 2,
+};
+
+enum {
+  EqualStrategyNumber = 1,
+  PrefixStrategyNumber = 2,
+  ContainStrategyNumber = 3,
 };
 
 #define KMER_MAX_SIZE 32
