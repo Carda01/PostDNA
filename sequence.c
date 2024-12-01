@@ -1,4 +1,5 @@
 #include "sequence.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include "funcapi.h"
@@ -8,6 +9,17 @@
 
 inline char* seq_get_string_type(int type) {
     return type == DNA ? "DNA" : type == KMER ? "KMER" : "QKMER";
+}
+
+
+sequence* seq_create_sequence(const uint8_t* data, size_t seq_length, size_t num_bytes, int type) {
+    sequence *seq = (sequence *) palloc0(sizeof(sequence) + num_bytes);
+    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
+    seq->overflow = seq_get_overflow(seq_length, type);
+
+    memcpy(seq->data, data, num_bytes);
+
+    return seq;
 }
 
 
@@ -21,11 +33,7 @@ sequence* seq_string_to_sequence(const char *seq_str, int type) {
     size_t num_bytes;
     uint8_t* data = seq_encode(seq_str, seq_length, &num_bytes, type);
 
-    sequence *seq = (sequence *) palloc(sizeof(sequence) + num_bytes);
-    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
-    seq->overflow = seq_get_overflow(seq_length, type);
-
-    memcpy(seq->data, data, num_bytes);
+    sequence *seq = seq_create_sequence(data, seq_length, num_bytes, type);
 
     pfree(data);
     return seq;
@@ -39,19 +47,19 @@ char *seq_sequence_to_string(sequence *seq, int type) {
     return seq_decode(seq->data, seq_get_length(seq, type), type);
 }
 
-inline size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type) {
+size_t seq_get_number_of_bytes_from_length(size_t seq_len, int type) {
   return (seq_len / seq_bases_per_byte(type)) + (seq_get_overflow(seq_len, type) != 0);
 }
 
-inline size_t seq_get_number_of_occupied_bytes(sequence* seq) {
+size_t seq_get_number_of_occupied_bytes(sequence* seq) {
   return VARSIZE(seq) - sizeof(sequence);
 }
 
 size_t seq_get_length(sequence* seq, int type){
-  return (VARSIZE(seq) - sizeof(sequence) - 1) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
+  return (VARSIZE(seq) - sizeof(sequence) - sizeof(uint8_t)) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
 }
 
-inline uint8_t seq_get_overflow(size_t seq_length, int type) {
+uint8_t seq_get_overflow(size_t seq_length, int type) {
     return seq_length % (seq_bases_per_byte(type));
 }
 
@@ -288,14 +296,14 @@ Datum generate_kmers(PG_FUNCTION_ARGS)
     int                  max_calls;
  
     sequence *dna = (sequence *)PG_GETARG_POINTER(0);
-    uint8_t k = PG_GETARG_INT32(1); // k (for generating k-mers)
+    size_t k = PG_GETARG_INT32(1); // k (for generating k-mers)
 
-    if (k>KMER_MAX_SIZE || k> seq_get_length(dna,0) || k<=0){
+    if (k>KMER_MAX_SIZE || k> seq_get_length(dna,DNA) || k<=0){
           ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
             errmsg("Invalid Kmer Length!")));  }
 
     size_t num_kmers = seq_get_num_generable_kmers(seq_get_length(dna, DNA), k);
-    uint8_t data_bytes = seq_get_number_of_bytes_from_length(k, KMER);
+    size_t data_bytes = seq_get_number_of_bytes_from_length(k, KMER);
       
     if (SRF_IS_FIRSTCALL())
     {
