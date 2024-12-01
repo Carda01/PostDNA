@@ -228,10 +228,42 @@ bool seq_equals(sequence* seq1, sequence* seq2, int type) {
     if (seq_get_length(seq1, type) != seq_get_length(seq2, type)) {
         return false;
     }
-    
+
     const size_t num_bytes = seq_get_number_of_occupied_bytes(seq1);
     for (size_t i = 0; i < num_bytes; ++i) {
         if (seq1->data[i] != seq2->data[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool seq_starts_with(sequence* seq, sequence* prefix, int type) {
+    //prefix is the first argument
+    const size_t prefix_length = seq_get_length(prefix, type);
+    const size_t seq_length = seq_get_length(seq, type);
+
+    if (prefix_length > seq_length) {
+        return false;
+    }
+
+    const size_t num_bytes_prefix = seq_get_number_of_occupied_bytes(prefix);
+    const size_t num_full_bytes_prefix = num_bytes_prefix - (seq_get_overflow(prefix_length, type) != 0 ? 1 : 0);
+    // full bytes comparison
+    for (size_t i = 0; i < num_full_bytes_prefix; ++i) {
+        if (prefix->data[i] != seq->data[i]) {
+            return false;
+        }
+    }
+
+    // if the prefix has overflow, we should compare the significant bits of the prefix's last byte with the corresponding masked sequence's byte
+    uint8_t prefix_overflow = seq_get_overflow(prefix_length, type);
+    if (prefix_overflow > 0) {
+        uint8_t mask = (0xFF << (8 - prefix_overflow * (type == QKMER ? 4 : 2)));
+        uint8_t seq_corresponding_byte = seq->data[num_full_bytes_prefix] & mask;
+
+        if (prefix->data[num_full_bytes_prefix] != seq_corresponding_byte) {
             return false;
         }
     }

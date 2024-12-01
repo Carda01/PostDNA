@@ -55,6 +55,15 @@ Datum qkmer_equals(PG_FUNCTION_ARGS) {
   PG_RETURN_BOOL(result);
 }
 
+PG_FUNCTION_INFO_V1(qkmer_starts_with);
+Datum qkmer_starts_with(PG_FUNCTION_ARGS) {
+  sequence *qkmer = PG_GETARG_SEQ_P(0);
+  sequence *prefix = PG_GETARG_SEQ_P(1);
+  bool result = seq_starts_with(qkmer, prefix, QKMER);
+  PG_FREE_IF_COPY(qkmer, 0);
+  PG_FREE_IF_COPY(prefix, 1);
+  PG_RETURN_BOOL(result);
+}
 
 PG_FUNCTION_INFO_V1(qkmer_contains);
 Datum qkmer_contains(PG_FUNCTION_ARGS) {

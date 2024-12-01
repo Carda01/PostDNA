@@ -123,13 +123,17 @@ CREATE FUNCTION kmer_ne(kmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'kmer_nequals'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-CREATE FUNCTION kmer_hash(kmer) 
+CREATE FUNCTION kmer_hash(kmer)
   RETURNS integer
   AS 'MODULE_PATHNAME', 'kmer_hash'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION kmer_sw(kmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'kmer_starts_with'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OPERATOR = (
-  LEFTARG = kmer, 
+  LEFTARG = kmer,
   RIGHTARG = kmer,
   PROCEDURE = kmer_eq,
   COMMUTATOR = '=',
@@ -138,6 +142,13 @@ CREATE OPERATOR = (
   JOIN = eqjoinsel
 );
 COMMENT ON OPERATOR =(kmer, kmer) IS 'equals?';
+
+CREATE OPERATOR ^@ (
+  LEFTARG = kmer,
+  RIGHTARG = kmer,
+  PROCEDURE = kmer_sw
+);
+COMMENT ON OPERATOR ^@(kmer, kmer) IS 'starts with?';
 
 CREATE OPERATOR <> (
   LEFTARG = kmer,
@@ -163,6 +174,10 @@ CREATE FUNCTION qkmer_eq(qkmer, qkmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'qkmer_equals'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION qkmer_sw(qkmer, qkmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'qkmer_starts_with'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 CREATE FUNCTION qkmer_contains(qkmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME'
@@ -177,6 +192,13 @@ CREATE OPERATOR = (
   JOIN = eqjoinsel
 );
 COMMENT ON OPERATOR =(qkmer, qkmer) IS 'equals?';
+
+CREATE OPERATOR ^@ (
+  LEFTARG = qkmer,
+  RIGHTARG = qkmer,
+  PROCEDURE = qkmer_sw
+);
+COMMENT ON OPERATOR ^@(qkmer, qkmer) IS 'starts with?';
 
 CREATE OPERATOR @> (
   LEFTARG = qkmer, 

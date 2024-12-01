@@ -56,3 +56,20 @@ INSERT INTO km VALUES
 ('TAC');
 
 select * from t where qkmer @> kmer;
+
+-- starts-with test
+
+DROP TABLE kmers;
+DROP TABLE qkmers;
+
+CREATE TABLE kmers (kmer kmer);
+CREATE TABLE qkmers (qkmer qkmer);
+
+INSERT INTO kmers VALUES ('TACGAAACT'), ('ATACGATCCT'), ('TACGACTA'), ('TACGCTC');
+INSERT INTO qkmers VALUES ('TAYCSGAAACT'), ('ATACGATCCT'), ('TAVCGACTA'), ('TAYCGCTC'), ('TAYCSGCTC');
+
+SELECT * FROM kmers WHERE kmer_sw(kmer, 'TACGA'::kmer);
+SELECT * FROM kmers WHERE kmer ^@ 'TACG';
+
+SELECT * FROM qkmers WHERE qkmer_sw(qkmer, 'TAYCS'::qkmer);
+SELECT * FROM qkmers WHERE qkmer ^@ 'TAV';

@@ -73,6 +73,7 @@ inline uint8_t seq_get_overflow(size_t seq_length, int type);
 size_t seq_get_num_generable_kmers(size_t seq_len, uint8_t k);
 
 bool seq_equals(sequence* seq1, sequence* seq2, int type);
+bool seq_starts_with(sequence* seq, sequence* prefix, int type);
 int seq_hash(sequence* seq, int type);
 
 sequence* seq_generate_kmers(sequence* seq, uint8_t k);
