@@ -13,6 +13,16 @@
 #include "utils/pg_locale.h"
 #include "utils/varlena.h"
 
+#define GET_VARIABLE_NAME(Variable) (#Variable)
+
+void logSeq2(sequence *seq, char* name) {
+    if(seq == NULL){
+        elog(DEBUG1, "pointer is NULL");
+    }
+    else {
+        elog(DEBUG1, "%s: %s", name, seq_sequence_to_string(seq, KMER));
+    }
+}
 
 void logSeq(sequence *seq) {
     if(seq == NULL){
@@ -157,7 +167,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_config);
 Datum
 spg_sequence_config(PG_FUNCTION_ARGS)
 {
-    elog(DEBUG1, "config");
+    //elog(DEBUG1, "config");
 	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
@@ -340,7 +350,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
 spg_sequence_picksplit(PG_FUNCTION_ARGS)
 {
-    elog(DEBUG1, "picksplit");
+    //elog(DEBUG1, "picksplit");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
 	sequence	   *seq0 = DatumGetSEQP(in->datums[0]);
@@ -350,7 +360,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
-    elog(DEBUG1, "commonLen: %d", commonLen);
+    //elog(DEBUG1, "commonLen: %d", commonLen);
 
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
@@ -364,7 +374,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		if (tmp < commonLen)
 			commonLen = tmp;
 	}
-    elog(DEBUG1, "commonLen: %d", commonLen);
+    //elog(DEBUG1, "commonLen: %d", commonLen);
 
 	/* Set node prefix to be that string, if it's not empty */
 	if (commonLen == 0)
@@ -422,7 +432,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 			leafD = formSeqDatum(NULL, 0, 0); // TODO: check if it works when passing null
 
         // logSeq(leafD);
-        // elog(DEBUG1, "nNodes: %d", out->nNodes);
+        // //elog(DEBUG1, "nNodes: %d", out->nNodes);
 		out->leafTupleDatums[nodes[i].i] = leafD;
 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
 	}
@@ -434,7 +444,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
 Datum
 spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 {
-    elog(DEBUG1, "inner_consistent");
+    //elog(DEBUG1, "inner_consistent");
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	sequence	   *reconstructedValue;
@@ -458,13 +468,11 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	 */
 
 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
-    logSeq(reconstructedValue);
+    //logSeq2(reconstructedValue, GET_VARIABLE_NAME(reconstructedValue));
 	Assert(reconstructedValue == NULL ? in->level == 0 :
 		   kmer_get_length(reconstructedValue) == in->level);
 
 	maxReconstrLen = in->level + 1;
-    elog(DEBUG1, "maxReconstrLen: %d", maxReconstrLen);
-    elog(DEBUG1, "hasPrefix: %d", in->hasPrefix);
 	if (in->hasPrefix)
 	{
 		prefixSeq = DatumGetSEQP(in->prefixDatum);
@@ -473,10 +481,11 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 		maxReconstrLen += prefixLen;
 	}
 
-	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
-	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
-    reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
 
+    reconstrSeq = seq_create_empty_sequence(maxReconstrLen, KMER);
+
+    //elog(DEBUG1, "inLevel :%d", in->level);
+    //elog(DEBUG1, "prefixLen: %d", prefixLen);
 	if (in->level)
         sequenceCopy(reconstrSeq->data,
                      reconstructedValue->data,
@@ -487,7 +496,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			   prefixSeq->data,
                in->level,
 			   prefixLen);
-	/* last byte of reconstrSeq will be filled in below */
+	/* last bit of reconstrSeq will be filled in below */
 
 	/*
 	 * Scan the child nodes.  For each one, complete the reconstructed value
@@ -500,11 +509,11 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	out->nNodes = 0;
 
     
-    elog(DEBUG1, "in->nNodes: %d", in->nNodes);
+    //elog(DEBUG1, "in->nNodes: %d", in->nNodes);
 	for (i = 0; i < in->nNodes; i++)
 	{
 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
-        elog(DEBUG1, "nodeChar: %d", nodeChar);
+        //elog(DEBUG1, "nodeChar: %d", nodeChar);
 		int			thisLen;
         int         thisSize;
 		bool		res = true;
@@ -518,6 +527,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
             set_base_at_index(reconstrSeq->data, maxReconstrLen - 1, nodeChar);
 			thisLen = maxReconstrLen;
 		}
+        //logSeq2(reconstrSeq, GET_VARIABLE_NAME(reconstrSeq));
 
         thisSize = seq_get_number_of_bytes_from_length(thisLen, KMER);
 
@@ -530,19 +540,23 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
 
 			inSeq = DatumGetSEQP(in->scankeys[j].sk_argument);
+            //logSeq2(inSeq, GET_VARIABLE_NAME(inSeq));
 			inLen = kmer_get_length(inSeq);
 
             int commonLen = commonPrefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
+            //elog(DEBUG1, "**commonLen: %d", commonLen);
+            //elog(DEBUG1, "inLen: %d", inLen);
+            //elog(DEBUG1, "thisLen: %d", thisLen);
             int minLen = Min(inLen, thisLen);
 
 			switch (strategy)
 			{
 				case EqualStrategyNumber:
-					if (commonLen != minLen - 1 || inLen < thisLen)
+					if (commonLen != minLen || inLen < thisLen)
 						res = false;
 					break;
 				case PrefixStrategyNumber:
-					if (commonLen != minLen - 1)
+					if (commonLen != minLen)
 						res = false;
 					break;
                 // case ContainStrategyNumber:
@@ -552,6 +566,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 						 in->scankeys[j].sk_strategy);
 					break;
 			}
+            //elog(DEBUG1, "res: %d", res);
 
 			if (!res)
 				break;			/* no need to consider remaining conditions */
@@ -575,7 +590,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_leaf_consistent);
 Datum
 spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 {
-    // elog(DEBUG1, "leaf_consistent");
+    //elog(DEBUG1, "leaf_consistent");
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
 	int			level = in->level;
@@ -591,6 +606,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 	out->recheck = false;
 
 	leafValue = DatumGetSEQP(in->leafDatum);
+    //logSeq2(leafValue, "leafValue");
 
 	/* As above, in->reconstructedValue isn't toasted or short. */
 	if (DatumGetPointer(in->reconstructedValue))
@@ -609,15 +625,15 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		sequence	   *fullSeq = palloc(VARHDRSZ + fullLen);
-
-		SET_VARSIZE(fullSeq, VARHDRSZ + fullSize);
+        sequence       *fullSeq = seq_create_empty_sequence(fullLen, KMER);
 		fullValue = fullSeq->data;
+
 		if (level)
             sequenceCopy(fullValue, reconstrValue->data, 0, level);
 		if (kmer_get_length(leafValue) > 0)
             sequenceCopy(fullValue, leafValue->data, level, kmer_get_length(leafValue));
 		out->leafValue = PointerGetDatum(fullSeq);
+        //logSeq2(out->leafValue, "leafValue");
 	}
 
 	/* Perform the required comparison(s) */
@@ -635,11 +651,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			 * if level >= length of query then reconstrValue must begin with
 			 * query (prefix) string, so we don't need to check it again.
 			 */
-            // Wait for starts_with function
-			// res = (level >= queryLen) ||
-			// 	DatumGetBool(DirectFunctionCall2Coll(starts_with,
-			// 										 out->leafValue,
-			// 										 PointerGetDatum(query)));
+			res = (level >= queryLen) || (seq_starts_with(out->leafValue, query, KMER));
 
 			if (!res)			/* no need to consider remaining conditions */
 				break;
@@ -647,12 +659,13 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-        int commonIndex = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
+        int commonLen = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
+        //elog(DEBUG1, "commonLen: %d", commonLen);
 
 		switch (strategy)
 		{
 			case EqualStrategyNumber:
-				res = ((commonIndex == fullLen - 1) && (commonIndex == queryLen - 1));
+				res = ((commonLen == fullLen) && (commonLen == queryLen));
 				break;
             // case ContainStrategyNumber:
             //     break;
