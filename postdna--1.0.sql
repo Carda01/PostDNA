@@ -7,7 +7,7 @@
 
 -- DNA
 
-CREATE OR REPLACE FUNCTION dna_in(cstring)
+CREATE OR REPLACE FUNCTION dna_in(cstring, oid, integer)
   RETURNS dna
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
@@ -17,9 +17,22 @@ CREATE OR REPLACE FUNCTION dna_out(dna)
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION dna_typmod_in(cstring[])
+  RETURNS integer
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION dna_typmod_out(integer)
+  RETURNS cstring
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+
 CREATE TYPE dna (
   input          = dna_in,
-  output         = dna_out
+  output         = dna_out,
+  typmod_in      = dna_typmod_in,
+  typmod_out     = dna_typmod_out
 );
 
 COMMENT ON TYPE dna IS 'sequence of nucleotids (ACGT) without a max length';
@@ -34,8 +47,15 @@ CREATE OR REPLACE FUNCTION text(dna)
   AS 'MODULE_PATHNAME', 'dna_cast_to_text'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION dna_typmod_cast(dna, integer)
+  RETURNS dna
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+
 CREATE CAST (text as dna) WITH FUNCTION dna(text) AS IMPLICIT;
 CREATE CAST (dna as text) WITH FUNCTION text(dna);
+CREATE CAST (dna AS dna) WITH FUNCTION dna_typmod_cast(dna, integer) AS IMPLICIT; -- for type modifier
 
 
 
@@ -51,9 +71,21 @@ CREATE OR REPLACE FUNCTION kmer_out(kmer)
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION kmer_typmod_in(cstring[])
+  RETURNS integer
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION kmer_typmod_out(integer)
+  RETURNS cstring
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
 CREATE TYPE kmer (
   input          = kmer_in,
-  output         = kmer_out
+  output         = kmer_out,
+  typmod_in      = kmer_typmod_in,
+  typmod_out     = kmer_typmod_out
 );
 
 COMMENT ON TYPE kmer IS 'sequence of nucleotids (ACGT) without a max length';
@@ -68,8 +100,15 @@ CREATE OR REPLACE FUNCTION text(kmer)
   AS 'MODULE_PATHNAME', 'kmer_cast_to_text'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION kmer_typmod_cast(kmer, integer)
+  RETURNS kmer
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+
 CREATE CAST (text as kmer) WITH FUNCTION kmer(text) AS IMPLICIT;
 CREATE CAST (kmer as text) WITH FUNCTION text(kmer);
+CREATE CAST (kmer AS kmer) WITH FUNCTION kmer_typmod_cast(kmer, integer) AS IMPLICIT; -- for type modifier
 
 
 CREATE OR REPLACE FUNCTION generate_kmers(dna, integer)

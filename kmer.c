@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include "utils/array.h"   // For ArrayType
+#include "catalog/pg_type.h" // For type constants 
+#include "utils/builtins.h" // For pg_strtoint32
 
 PG_FUNCTION_INFO_V1(kmer_length);
 Datum kmer_length(PG_FUNCTION_ARGS)
@@ -80,4 +83,71 @@ Datum kmer_hash(PG_FUNCTION_ARGS) {
     int32 out = seq_hash(seq, KMER); 
     PG_FREE_IF_COPY(seq, 0);
     PG_RETURN_INT32(out);
+}
+
+PG_FUNCTION_INFO_V1(kmer_typmod_cast);
+Datum kmer_typmod_cast(PG_FUNCTION_ARGS) {
+    sequence *seq = (sequence *)PG_GETARG_POINTER(0);
+    int typmod = PG_GETARG_INT32(1); // Type modifier
+
+    // elog(NOTICE, "Typmod received in kmer_cast_from_text_typmod: %d", typmod);
+
+    if (typmod >= 0) // If type modifier exists
+    {
+        int max_length = typmod; // Typmod is the maximum allowed length
+        size_t seq_length = seq_get_length(seq, KMER);
+
+        if (seq_length > max_length) {
+            ereport(ERROR,
+                    (errcode(ERRCODE_STRING_DATA_RIGHT_TRUNCATION),
+                     errmsg("kmer sequence exceeds max length of %d", max_length)));
+        }
+    }
+
+    PG_RETURN_SEQ_P(seq);
+}
+
+PG_FUNCTION_INFO_V1(kmer_typmod_in);
+Datum kmer_typmod_in(PG_FUNCTION_ARGS) {
+    ArrayType *modifiers = PG_GETARG_ARRAYTYPE_P(0);
+    int32 *mods;
+    int nmods;
+
+    // Get the modifiers and their count
+    mods = ArrayGetIntegerTypmods(modifiers, &nmods);
+
+    int typmod = mods[0];
+
+    if (nmods != 1) {
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                 errmsg("Invalid type modifier"),
+                 errdetail("Kmer type modifier should be a single integer (e.g. kmer(10)). ")));
+    }
+
+    if ( typmod < 1 || typmod > 32 ) {
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                 errmsg("Invalid type modifier"),
+                 errdetail("Length for kmer type modifier must be between 1 and 32. ")));
+    }
+
+    // elog(NOTICE, "Typmod parsed in kmer_typmod_in: %d", typmod);
+
+    PG_RETURN_INT32(typmod); // Return the max length of kmer
+}
+
+
+PG_FUNCTION_INFO_V1(kmer_typmod_out);
+Datum kmer_typmod_out(PG_FUNCTION_ARGS) {
+    int typmod = PG_GETARG_INT32(0);
+    char *result;
+
+    if (typmod < 0) {
+        result = pstrdup(""); // No modifier specified
+    } else {
+        result = psprintf("(%d)", typmod); // Format as (50), for example
+    }
+
+    PG_RETURN_CSTRING(result);
 }
