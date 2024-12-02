@@ -64,6 +64,7 @@ typedef struct {
 Datum generate_kmers(PG_FUNCTION_ARGS); 
 
 sequence* seq_create_sequence(const uint8_t* data, size_t seq_length, size_t num_bytes, int type);
+sequence* seq_create_empty_sequence(size_t seq_length, int type);
 
 char* seq_get_byte_binary_representation(const uint8_t value);
 
