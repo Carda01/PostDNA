@@ -96,7 +96,7 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
   for (size_t i = 0; i < sequence_len; ++i) {
     int bits_occupied = type == QKMER ? 4 : 2;
     uint8_t shift = (8 - bits_occupied) - bits_occupied * (i % seq_bases_per_byte(type));
-    uint8_t byte_index = i / seq_bases_per_byte(type);
+    size_t byte_index = i / seq_bases_per_byte(type);
 
     switch (toupper(seq_str[i])) {
     case 'A':
