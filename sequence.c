@@ -12,6 +12,20 @@ inline char* seq_get_string_type(int type) {
 }
 
 
+sequence* seq_create_empty_sequence(size_t seq_length, int type) {
+    size_t num_bytes = seq_get_number_of_bytes_from_length(seq_length, type);
+    sequence *seq = (sequence *) palloc0(sizeof(sequence) + num_bytes);
+    SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
+    seq->overflow = seq_get_overflow(seq_length, type);
+
+    uint8_t *data = (uint8_t *) palloc0(sizeof(uint8_t) * (num_bytes));
+    memcpy(seq->data, data, num_bytes);
+
+    pfree(data);
+    return seq;
+}
+
+
 sequence* seq_create_sequence(const uint8_t* data, size_t seq_length, size_t num_bytes, int type) {
     sequence *seq = (sequence *) palloc0(sizeof(sequence) + num_bytes);
     SET_VARSIZE(seq, sizeof(sequence) + num_bytes);
@@ -82,7 +96,7 @@ uint8_t *seq_encode(const char *seq_str, const size_t sequence_len, size_t *data
   for (size_t i = 0; i < sequence_len; ++i) {
     int bits_occupied = type == QKMER ? 4 : 2;
     uint8_t shift = (8 - bits_occupied) - bits_occupied * (i % seq_bases_per_byte(type));
-    uint8_t byte_index = i / seq_bases_per_byte(type);
+    size_t byte_index = i / seq_bases_per_byte(type);
 
     switch (toupper(seq_str[i])) {
     case 'A':

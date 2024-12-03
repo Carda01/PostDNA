@@ -2,12 +2,14 @@
 \echo Use "CREATE EXTENSION postdna" to load this file. \quit
 
 /******************************************************************************
- * Input/Output
+ * Type definitions
  ******************************************************************************/
 
--- DNA
+------------------------------------------------------------------------------
+-----------------------------------DNA----------------------------------------
+------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION dna_in(cstring, oid, integer)
+CREATE OR REPLACE FUNCTION dna_in(cstring)
   RETURNS dna
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
@@ -57,9 +59,9 @@ CREATE CAST (text as dna) WITH FUNCTION dna(text) AS IMPLICIT;
 CREATE CAST (dna as text) WITH FUNCTION text(dna);
 CREATE CAST (dna AS dna) WITH FUNCTION dna_typmod_cast(dna, integer) AS IMPLICIT; -- for type modifier
 
-
-
--- Kmer
+------------------------------------------------------------------------------
+----------------------------------KMER----------------------------------------
+------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION kmer_in(cstring)
   RETURNS kmer
@@ -116,7 +118,9 @@ CREATE OR REPLACE FUNCTION generate_kmers(dna, integer)
     AS 'MODULE_PATHNAME', 'generate_kmers'
     LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
--- QKmer
+------------------------------------------------------------------------------
+----------------------------------QKMER---------------------------------------
+------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION qkmer_in(cstring)
   RETURNS qkmer
@@ -148,12 +152,25 @@ CREATE OR REPLACE FUNCTION text(qkmer)
 CREATE CAST (text as qkmer) WITH FUNCTION qkmer(text) AS IMPLICIT;
 CREATE CAST (qkmer as text) WITH FUNCTION text(qkmer);
 
+/******************************************************************************
+ * Operations and functions
+ ******************************************************************************/
 
--- *********************************************************************** --
--- KMERS
+------------------------------------------------------------------------------
+-----------------------------------DNA----------------------------------------
+------------------------------------------------------------------------------
 
+CREATE FUNCTION length(dna) RETURNS integer
+  AS 'MODULE_PATHNAME', 'dna_length'
+  LANGUAGE C STRICT;
 
+------------------------------------------------------------------------------
+----------------------------------KMER----------------------------------------
+------------------------------------------------------------------------------
 
+CREATE FUNCTION length(kmer) RETURNS integer
+  AS 'MODULE_PATHNAME', 'kmer_length'
+  LANGUAGE C STRICT;
 CREATE FUNCTION kmer_eq(kmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'kmer_equals'
@@ -162,13 +179,13 @@ CREATE FUNCTION kmer_ne(kmer, kmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'kmer_nequals'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-CREATE FUNCTION kmer_hash(kmer)
-  RETURNS integer
-  AS 'MODULE_PATHNAME', 'kmer_hash'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-CREATE FUNCTION kmer_sw(kmer, kmer)
+CREATE FUNCTION kmer_starts_with(kmer, kmer)
   RETURNS boolean
-  AS 'MODULE_PATHNAME', 'kmer_starts_with'
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+CREATE FUNCTION kmer_started_with(kmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OPERATOR = (
@@ -182,13 +199,6 @@ CREATE OPERATOR = (
 );
 COMMENT ON OPERATOR =(kmer, kmer) IS 'equals?';
 
-CREATE OPERATOR ^@ (
-  LEFTARG = kmer,
-  RIGHTARG = kmer,
-  PROCEDURE = kmer_sw
-);
-COMMENT ON OPERATOR ^@(kmer, kmer) IS 'starts with?';
-
 CREATE OPERATOR <> (
   LEFTARG = kmer,
   RIGHTARG = kmer,
@@ -201,23 +211,38 @@ CREATE OPERATOR <> (
 
 COMMENT ON OPERATOR <>(kmer,kmer) IS 'not equals?';
 
-CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
-    OPERATOR 1 = (kmer, kmer),
-    FUNCTION 1 kmer_hash(kmer);
+CREATE OPERATOR ^@ (
+  LEFTARG = kmer,
+  RIGHTARG = kmer,
+  PROCEDURE = kmer_starts_with,
+  COMMUTATOR = '@^'
+);
+COMMENT ON OPERATOR ^@(kmer, kmer) IS 'starts with?';
+
+CREATE OPERATOR @^ (
+  LEFTARG = kmer,
+  RIGHTARG = kmer,
+  PROCEDURE = kmer_started_with,
+  COMMUTATOR = '^@'
+);
+COMMENT ON OPERATOR @^(kmer, kmer) IS 'started with?';
 
 ------------------------------------------------------------------------------
------------------------------QKMER---------------------------------------------
+----------------------------------QKMER---------------------------------------
 ------------------------------------------------------------------------------
 
+CREATE FUNCTION length(qkmer) RETURNS integer
+  AS 'MODULE_PATHNAME', 'qkmer_length'
+  LANGUAGE C STRICT;
 CREATE FUNCTION qkmer_eq(qkmer, qkmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME', 'qkmer_equals'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-CREATE FUNCTION qkmer_sw(qkmer, qkmer)
+CREATE FUNCTION qkmer_starts_with(qkmer, qkmer)
   RETURNS boolean
-  AS 'MODULE_PATHNAME', 'qkmer_starts_with'
+  AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-CREATE FUNCTION qkmer_contains(qkmer, kmer)
+CREATE FUNCTION qkmer_started_with(qkmer, qkmer)
   RETURNS boolean
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
@@ -235,35 +260,71 @@ COMMENT ON OPERATOR =(qkmer, qkmer) IS 'equals?';
 CREATE OPERATOR ^@ (
   LEFTARG = qkmer,
   RIGHTARG = qkmer,
-  PROCEDURE = qkmer_sw
+  PROCEDURE = qkmer_starts_with,
+  COMMUTATOR = '@^'
 );
 COMMENT ON OPERATOR ^@(qkmer, qkmer) IS 'starts with?';
+
+CREATE OPERATOR @^ (
+  LEFTARG = qkmer,
+  RIGHTARG = qkmer,
+  PROCEDURE = qkmer_started_with,
+  COMMUTATOR = '^@'
+);
+COMMENT ON OPERATOR @^(qkmer, qkmer) IS 'started with?';
+
+------------------------------------------------------------------------------
+---------------------------------SHARED---------------------------------------
+------------------------------------------------------------------------------
+
+CREATE FUNCTION qkmer_contains(qkmer, kmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION qkmer_is_contained(kmer, qkmer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OPERATOR @> (
   LEFTARG = qkmer, 
   RIGHTARG = kmer,
-  PROCEDURE = qkmer_contains
+  PROCEDURE = qkmer_contains,
+  COMMUTATOR = '<@'
 );
 COMMENT ON OPERATOR @>(qkmer, kmer) IS 'contains?';
 
--- *********************************************************************** --
--- Lengths Functions 
-
-CREATE FUNCTION length(dna) RETURNS integer
-    AS 'MODULE_PATHNAME', 'dna_length'
-    LANGUAGE C STRICT;
-
-CREATE FUNCTION length(kmer) RETURNS integer
-    AS 'MODULE_PATHNAME', 'kmer_length'
-    LANGUAGE C STRICT;
-
-CREATE FUNCTION length(qkmer) RETURNS integer
-    AS 'MODULE_PATHNAME', 'qkmer_length'
-    LANGUAGE C STRICT;
+CREATE OPERATOR <@ (
+  LEFTARG = kmer, 
+  RIGHTARG = qkmer,
+  PROCEDURE = qkmer_is_contained,
+  COMMUTATOR = '@>'
+);
+COMMENT ON OPERATOR <@(kmer, qkmer) IS 'is contained?';
 
 
--- *********************************************************************** --
--- Index
+/******************************************************************************
+ * Operator classes and index
+ ******************************************************************************/
+
+------------------------------------------------------------------------------
+----------------------------------KMER----------------------------------------
+------------------------------------------------------------------------------
+
+
+----------------------------------HASH----------------------------------------
+
+CREATE FUNCTION kmer_hash(kmer)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'kmer_hash'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
+    OPERATOR 1 = (kmer, kmer),
+    FUNCTION 1 kmer_hash(kmer);
+
+---------------------------------SPGIST---------------------------------------
 
 CREATE OR REPLACE FUNCTION spg_sequence_config(internal, internal)
 	RETURNS void
@@ -286,11 +347,10 @@ CREATE OR REPLACE FUNCTION spg_sequence_leaf_consistent(internal, internal)
 	AS 'MODULE_PATHNAME'
 	LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-CREATE OPERATOR CLASS spg_kmer_ops
-	FOR TYPE kmer USING SPGIST AS
+CREATE OPERATOR CLASS spg_kmer_ops DEFAULT FOR TYPE kmer USING SPGIST AS
         OPERATOR        1       = ,
-        --OPERATOR        2       ^@ ,
-        --OPERATOR        3       @> ,
+        OPERATOR        2       ^@,
+        -- OPERATOR        3       @>,
         FUNCTION        1       spg_sequence_config(internal, internal),
         FUNCTION        2       spg_sequence_choose(internal, internal),
         FUNCTION        3       spg_sequence_picksplit(internal, internal),

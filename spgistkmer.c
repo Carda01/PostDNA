@@ -7,16 +7,40 @@
 #include "common/int.h"
 #include "mb/pg_wchar.h"
 #include "sequence.h"
+#include "postgres.h"
 #include "utils/datum.h"
 #include "utils/fmgrprotos.h"
 #include "utils/pg_locale.h"
 #include "utils/varlena.h"
 
+#define GET_VARIABLE_NAME(Variable) (#Variable)
 
-
-// I expect that target and source are both initialized with the correct size
 void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length) {
-   
+    int data_bytes = length / 4;
+    int overflow = length % 4;
+    int start_byte = target_start / 4;
+    int start_overflow = target_start % 4;
+    int bits_copied = 0;
+    for (int i = 0; bits_copied < length; i++) {
+        target[start_byte + i] |= source[i] >> (start_overflow * 2);
+        bits_copied += 4 - start_overflow;
+        if(bits_copied < length) {
+            target[start_byte + i + 1] |= source[i] << ((4 - start_overflow) * 2);
+            bits_copied += start_overflow;
+        }
+    }
+    
+    int final_length = target_start + 1 + length;
+    int final_size = seq_get_number_of_bytes_from_length(final_length, KMER);
+    if ((final_length) % 4){ 
+        uint8_t cleaner = 0x0;
+        uint8_t i = 8 - 2 * (final_length % 4);
+        while(i <= 6) {
+            cleaner |= (BASE_MASK << i); 
+            i+=2;
+        }
+        target[final_size - 1] &= cleaner;
+    }
 }
 
 void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
@@ -52,7 +76,7 @@ static Datum
 formSeqDatum(const uint8_t *data, int begin, int datalen)
 {
     sequence* seq;
-    size_t num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
+    int num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
     uint8_t overflow = begin % 4;
     data += (begin / 4);
     if(overflow == 0){
@@ -73,7 +97,7 @@ formSeqDatum(const uint8_t *data, int begin, int datalen)
         pfree(new_data);
     }
 
-    if ((overflow + datalen) % 4){ 
+    if (datalen % 4){ 
         uint8_t cleaner = 0x0;
         uint8_t i = 8 - 2 * (datalen % 4);
         while(i <= 6) {
@@ -108,9 +132,9 @@ commonPrefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb)
  * On success, *i gets the match location; on failure, it gets where to insert
  */
 static bool
-searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i)
+searchBase(Datum *nodeLabels, int nNodes, int16 c, int *i)
 {
-    i = 0;
+    *i = 0;
     while(*i < nNodes) {
         if(c == nodeLabels[*i]) {
             return true;
@@ -162,6 +186,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
                                  in->level,
 								 inLen - in->level,
 								 prefixLen);
+
 
 		if (commonLen == prefixLen)
 		{
@@ -219,7 +244,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	}
 
 	/* Look up nodeBase in the node label array */
-	if (searchChar(in->nodeLabels, in->nNodes, nodeBase, &i))
+	if (searchBase(in->nodeLabels, in->nNodes, nodeBase, &i))
 	{
 		/*
 		 * Descend to existing node.  (If in->allTheSame, the core code will
@@ -279,6 +304,28 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 }
 
 
+int compare_int(int a, int b){
+    if(a == b){
+        return 0;
+    }
+    else if(a > b){
+        return 1;
+    }
+    else 
+        return -1;
+}
+
+/* qsort comparator to sort spgNodePtr structs by "c" */
+static int
+cmpNodePtr(const void *a, const void *b)
+{
+	const spgNodePtr *aa = (const spgNodePtr *) a;
+	const spgNodePtr *bb = (const spgNodePtr *) b;
+
+	return compare_int(aa->c, bb->c);
+}
+
+
 PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
 spg_sequence_picksplit(PG_FUNCTION_ARGS)
@@ -292,6 +339,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
+
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
@@ -304,12 +352,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		if (tmp < commonLen)
 			commonLen = tmp;
 	}
-
-	/*
-	 * Limit the prefix length, if necessary, to ensure that the resulting
-	 * inner tuple will fit on a page.
-	 */
-	commonLen = Min(commonLen, SPGIST_MAX_PREFIX_LENGTH);
 
 	/* Set node prefix to be that string, if it's not empty */
 	if (commonLen == 0)
@@ -329,13 +371,17 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
 
-		if (commonLen < kmer_get_length(seqi))
+		if (commonLen < kmer_get_length(seqi)){
 			nodes[i].c = get_base_at_index(seqi->data, commonLen);
-		else
+        }
+		else{
 			nodes[i].c = -1;	/* use -1 if string is all common */
+        }
 		nodes[i].i = i;
 		nodes[i].d = in->datums[i];
 	}
+
+	qsort(nodes, in->nTuples, sizeof(*nodes), cmpNodePtr);
 
 	/* And emit results */
 	out->nNodes = 0;
@@ -355,8 +401,9 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		}
 
 		if (commonLen < kmer_get_length(seqi))
-			leafD = formSeqDatum(seqi->data, commonLen + 1,
-								  kmer_get_length(seqi) - commonLen - 1);
+			leafD = formSeqDatum(seqi->data, 
+                                 commonLen + 1,
+								 kmer_get_length(seqi) - commonLen - 1);
 		else
 			leafD = formSeqDatum(NULL, 0, 0); // TODO: check if it works when passing null
 
@@ -402,13 +449,12 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	{
 		prefixSeq = DatumGetSEQP(in->prefixDatum);
 		prefixLen = kmer_get_length(prefixSeq);
+        prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
 		maxReconstrLen += prefixLen;
 	}
 
-    prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
-	reconstrSeq = palloc0(sizeof(sequence) + prefixSize);
-	SET_VARSIZE(reconstrSeq, sizeof(sequence) + prefixSize);
-    reconstrSeq->overflow = seq_get_overflow(prefixLen, KMER);
+
+    reconstrSeq = seq_create_empty_sequence(maxReconstrLen, KMER);
 
 	if (in->level)
         sequenceCopy(reconstrSeq->data,
@@ -420,7 +466,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			   prefixSeq->data,
                in->level,
 			   prefixLen);
-	/* last byte of reconstrSeq will be filled in below */
+	/* last bit of reconstrSeq will be filled in below */
 
 	/*
 	 * Scan the child nodes.  For each one, complete the reconstructed value
@@ -432,6 +478,8 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	out->reconstructedValues = (Datum *) palloc(sizeof(Datum) * in->nNodes);
 	out->nNodes = 0;
 
+    
+    int minusOneCheck = 0;
 	for (i = 0; i < in->nNodes; i++)
 	{
 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
@@ -441,8 +489,13 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 		int			j;
 
 		/* If nodeChar is a dummy value, don't include it in data */
-		if (nodeChar <= 0)
+		if (nodeChar < 0){
 			thisLen = maxReconstrLen - 1;
+            int num_bytes = seq_get_number_of_bytes_from_length(thisLen, KMER);
+            sequence *tmp = seq_create_sequence(reconstrSeq->data, thisLen, seq_get_number_of_bytes_from_length(thisLen, KMER), KMER);
+            pfree(reconstrSeq);
+            reconstrSeq = tmp;
+        }
 		else
 		{
             set_base_at_index(reconstrSeq->data, maxReconstrLen - 1, nodeChar);
@@ -451,6 +504,10 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
         thisSize = seq_get_number_of_bytes_from_length(thisLen, KMER);
 
+        if(nodeChar == -1 && minusOneCheck != 0) {
+            res = minusOneCheck == 1 ? true : false;
+        }
+        else {
 		for (j = 0; j < in->nkeys; j++)
 		{
 			StrategyNumber strategy = in->scankeys[j].sk_strategy;
@@ -468,11 +525,11 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			switch (strategy)
 			{
 				case EqualStrategyNumber:
-					if (commonLen != minLen - 1 || inLen < thisLen)
+					if (commonLen != minLen || inLen < thisLen)
 						res = false;
 					break;
 				case PrefixStrategyNumber:
-					if (commonLen != minLen - 1)
+					if (commonLen != minLen)
 						res = false;
 					break;
                 // case ContainStrategyNumber:
@@ -483,9 +540,13 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 					break;
 			}
 
+            if(nodeChar == -1){
+                minusOneCheck = res ? 1 : 2;
+            }
 			if (!res)
 				break;			/* no need to consider remaining conditions */
 		}
+        }
 
 		if (res)
 		{
@@ -538,10 +599,9 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		sequence	   *fullSeq = palloc(VARHDRSZ + fullLen);
-
-		SET_VARSIZE(fullSeq, VARHDRSZ + fullSize);
+        sequence       *fullSeq = seq_create_empty_sequence(fullLen, KMER);
 		fullValue = fullSeq->data;
+
 		if (level)
             sequenceCopy(fullValue, reconstrValue->data, 0, level);
 		if (kmer_get_length(leafValue) > 0)
@@ -564,11 +624,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			 * if level >= length of query then reconstrValue must begin with
 			 * query (prefix) string, so we don't need to check it again.
 			 */
-            // Wait for starts_with function
-			// res = (level >= queryLen) ||
-			// 	DatumGetBool(DirectFunctionCall2Coll(starts_with,
-			// 										 out->leafValue,
-			// 										 PointerGetDatum(query)));
+			res = (level >= queryLen) || (seq_starts_with(out->leafValue, query, KMER));
 
 			if (!res)			/* no need to consider remaining conditions */
 				break;
@@ -576,12 +632,12 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-        int commonIndex = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
+        int commonLen = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
 
 		switch (strategy)
 		{
 			case EqualStrategyNumber:
-				res = ((commonIndex == fullLen - 1) && (commonIndex == queryLen - 1));
+				res = ((commonLen == fullLen) && (commonLen == queryLen));
 				break;
             // case ContainStrategyNumber:
             //     break;
