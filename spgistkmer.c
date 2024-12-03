@@ -182,7 +182,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_choose);
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
 {
-    //elog(DEBUG1, "choose");
+    // elog(DEBUG1, "choose");
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	sequence	   *inSeq = DatumGetSEQP(in->datum);
@@ -198,6 +198,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	if (in->hasPrefix)
 	{
 		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
+        //logSeq2(prefixSeq, "*prefixSeq");
 
 		prefixData = prefixSeq->data;
 		prefixLen = kmer_get_length(prefixSeq);
@@ -207,9 +208,13 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
                                  in->level,
 								 inLen - in->level,
 								 prefixLen);
+        //elog(DEBUG1, "*commonLen: %d", commonLen);
+
 
 		if (commonLen == prefixLen)
 		{
+            //elog(DEBUG1, "*inLen: %d", inLen);
+            //elog(DEBUG1, "*inLevel: %d", in->level);
 			if (inLen - in->level > commonLen)
 				nodeBase = get_base_at_index(inData, in->level + commonLen);
 			else
@@ -230,14 +235,18 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 				out->result.splitTuple.prefixPrefixDatum =
 					formSeqDatum(prefixData, 0, commonLen);
 			}
+            logSeq2(out->result.splitTuple.prefixPrefixDatum, "ciaooo");
 			out->result.splitTuple.prefixNNodes = 1;
 			out->result.splitTuple.prefixNodeLabels =
 				(Datum *) palloc(sizeof(Datum));
 			out->result.splitTuple.prefixNodeLabels[0] =
 				Int16GetDatum(get_base_at_index(prefixData, commonLen));
+            elog(DEBUG1, "*prefixNodeLables[0]: %d", out->result.splitTuple.prefixNodeLabels[0]);
 
 			out->result.splitTuple.childNodeN = 0;
 
+            elog(DEBUG1, "prefixLen: %d", prefixLen);
+            elog(DEBUG1, "commonLen: %d", commonLen);
 			if (prefixLen - commonLen == 1)
 			{
 				out->result.splitTuple.postfixHasPrefix = false;
@@ -468,7 +477,8 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	 */
 
 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
-    //logSeq2(reconstructedValue, GET_VARIABLE_NAME(reconstructedValue));
+    //elog(DEBUG1, "level: %d", in->level);
+    //logSeq2(reconstructedValue, "reconstructedValue");
 	Assert(reconstructedValue == NULL ? in->level == 0 :
 		   kmer_get_length(reconstructedValue) == in->level);
 
@@ -476,6 +486,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	if (in->hasPrefix)
 	{
 		prefixSeq = DatumGetSEQP(in->prefixDatum);
+        //logSeq2(prefixSeq, "prefixSeq");
 		prefixLen = kmer_get_length(prefixSeq);
         prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
 		maxReconstrLen += prefixLen;
@@ -509,7 +520,8 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	out->nNodes = 0;
 
     
-    //elog(DEBUG1, "in->nNodes: %d", in->nNodes);
+    int minusOneCheck = 0;
+    //elog(DEBUG1, "**in->nNodes: %d", in->nNodes);
 	for (i = 0; i < in->nNodes; i++)
 	{
 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
@@ -520,8 +532,13 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 		int			j;
 
 		/* If nodeChar is a dummy value, don't include it in data */
-		if (nodeChar < 0)
+		if (nodeChar < 0){
 			thisLen = maxReconstrLen - 1;
+            int num_bytes = seq_get_number_of_bytes_from_length(thisLen, KMER);
+            sequence *tmp = seq_create_sequence(reconstrSeq->data, thisLen, seq_get_number_of_bytes_from_length(thisLen, KMER), KMER);
+            pfree(reconstrSeq);
+            reconstrSeq = tmp;
+        }
 		else
 		{
             set_base_at_index(reconstrSeq->data, maxReconstrLen - 1, nodeChar);
@@ -531,6 +548,12 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
         thisSize = seq_get_number_of_bytes_from_length(thisLen, KMER);
 
+        // elog(DEBUG1, "nodeChar: %d", nodeChar);
+        // elog(DEBUG1, "minsCheck: %d", minusOneCheck);
+        if(nodeChar == -1 && minusOneCheck != 0) {
+            res = minusOneCheck == 1 ? true : false;
+        }
+        else {
 		for (j = 0; j < in->nkeys; j++)
 		{
 			StrategyNumber strategy = in->scankeys[j].sk_strategy;
@@ -539,6 +562,7 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			int			r;
 
 
+            //logSeq2(reconstrSeq, "reconstrSeq");
 			inSeq = DatumGetSEQP(in->scankeys[j].sk_argument);
             //logSeq2(inSeq, GET_VARIABLE_NAME(inSeq));
 			inLen = kmer_get_length(inSeq);
@@ -568,9 +592,13 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			}
             //elog(DEBUG1, "res: %d", res);
 
+            if(nodeChar == -1){
+                minusOneCheck = res ? 1 : 2;
+            }
 			if (!res)
 				break;			/* no need to consider remaining conditions */
 		}
+        }
 
 		if (res)
 		{

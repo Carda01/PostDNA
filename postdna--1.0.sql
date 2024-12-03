@@ -7,7 +7,7 @@
 
 -- DNA
 
-CREATE OR REPLACE FUNCTION dna_in(cstring, oid, integer)
+CREATE OR REPLACE FUNCTION dna_in(cstring)
   RETURNS dna
   AS 'MODULE_PATHNAME'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
@@ -201,7 +201,7 @@ CREATE OPERATOR <> (
 
 COMMENT ON OPERATOR <>(kmer,kmer) IS 'not equals?';
 
-CREATE OPERATOR CLASS kmer_ops FOR TYPE kmer USING hash AS
+CREATE OPERATOR CLASS kmer_ops DEFAULT FOR TYPE kmer USING hash AS
     OPERATOR 1 = (kmer, kmer),
     FUNCTION 1 kmer_hash(kmer);
 
