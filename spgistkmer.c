@@ -15,25 +15,6 @@
 
 #define GET_VARIABLE_NAME(Variable) (#Variable)
 
-void logSeq2(sequence *seq, char* name) {
-    if(seq == NULL){
-        elog(DEBUG1, "pointer is NULL");
-    }
-    else {
-        elog(DEBUG1, "%s: %s", name, seq_sequence_to_string(seq, KMER));
-    }
-}
-
-void logSeq(sequence *seq) {
-    if(seq == NULL){
-        elog(DEBUG1, "pointer is NULL");
-    }
-    else {
-        elog(DEBUG1, "sequence: %s", seq_sequence_to_string(seq, KMER));
-    }
-}
-
-
 void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length) {
     int data_bytes = length / 4;
     int overflow = length % 4;
@@ -167,7 +148,6 @@ PG_FUNCTION_INFO_V1(spg_sequence_config);
 Datum
 spg_sequence_config(PG_FUNCTION_ARGS)
 {
-    //elog(DEBUG1, "config");
 	spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0);
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
@@ -182,7 +162,6 @@ PG_FUNCTION_INFO_V1(spg_sequence_choose);
 Datum
 spg_sequence_choose(PG_FUNCTION_ARGS)
 {
-    // elog(DEBUG1, "choose");
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	sequence	   *inSeq = DatumGetSEQP(in->datum);
@@ -198,7 +177,6 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	if (in->hasPrefix)
 	{
 		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
-        //logSeq2(prefixSeq, "*prefixSeq");
 
 		prefixData = prefixSeq->data;
 		prefixLen = kmer_get_length(prefixSeq);
@@ -208,13 +186,10 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
                                  in->level,
 								 inLen - in->level,
 								 prefixLen);
-        //elog(DEBUG1, "*commonLen: %d", commonLen);
 
 
 		if (commonLen == prefixLen)
 		{
-            //elog(DEBUG1, "*inLen: %d", inLen);
-            //elog(DEBUG1, "*inLevel: %d", in->level);
 			if (inLen - in->level > commonLen)
 				nodeBase = get_base_at_index(inData, in->level + commonLen);
 			else
@@ -235,18 +210,14 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 				out->result.splitTuple.prefixPrefixDatum =
 					formSeqDatum(prefixData, 0, commonLen);
 			}
-            logSeq2(out->result.splitTuple.prefixPrefixDatum, "ciaooo");
 			out->result.splitTuple.prefixNNodes = 1;
 			out->result.splitTuple.prefixNodeLabels =
 				(Datum *) palloc(sizeof(Datum));
 			out->result.splitTuple.prefixNodeLabels[0] =
 				Int16GetDatum(get_base_at_index(prefixData, commonLen));
-            elog(DEBUG1, "*prefixNodeLables[0]: %d", out->result.splitTuple.prefixNodeLabels[0]);
 
 			out->result.splitTuple.childNodeN = 0;
 
-            elog(DEBUG1, "prefixLen: %d", prefixLen);
-            elog(DEBUG1, "commonLen: %d", commonLen);
 			if (prefixLen - commonLen == 1)
 			{
 				out->result.splitTuple.postfixHasPrefix = false;
@@ -359,7 +330,6 @@ PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
 spg_sequence_picksplit(PG_FUNCTION_ARGS)
 {
-    //elog(DEBUG1, "picksplit");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
 	sequence	   *seq0 = DatumGetSEQP(in->datums[0]);
@@ -369,7 +339,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
-    //elog(DEBUG1, "commonLen: %d", commonLen);
 
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
@@ -383,7 +352,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		if (tmp < commonLen)
 			commonLen = tmp;
 	}
-    //elog(DEBUG1, "commonLen: %d", commonLen);
 
 	/* Set node prefix to be that string, if it's not empty */
 	if (commonLen == 0)
@@ -424,7 +392,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	for (i = 0; i < in->nTuples; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(nodes[i].d);
-        // logSeq(nodes[i].d);
 		Datum		leafD;
 
 		if (i == 0 || nodes[i].c != nodes[i - 1].c)
@@ -440,8 +407,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 		else
 			leafD = formSeqDatum(NULL, 0, 0); // TODO: check if it works when passing null
 
-        // logSeq(leafD);
-        // //elog(DEBUG1, "nNodes: %d", out->nNodes);
 		out->leafTupleDatums[nodes[i].i] = leafD;
 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
 	}
@@ -453,7 +418,6 @@ PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
 Datum
 spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 {
-    //elog(DEBUG1, "inner_consistent");
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	sequence	   *reconstructedValue;
@@ -477,8 +441,6 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	 */
 
 	reconstructedValue = DatumGetSEQP(in->reconstructedValue);
-    //elog(DEBUG1, "level: %d", in->level);
-    //logSeq2(reconstructedValue, "reconstructedValue");
 	Assert(reconstructedValue == NULL ? in->level == 0 :
 		   kmer_get_length(reconstructedValue) == in->level);
 
@@ -486,7 +448,6 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 	if (in->hasPrefix)
 	{
 		prefixSeq = DatumGetSEQP(in->prefixDatum);
-        //logSeq2(prefixSeq, "prefixSeq");
 		prefixLen = kmer_get_length(prefixSeq);
         prefixSize = seq_get_number_of_bytes_from_length(prefixLen, KMER);
 		maxReconstrLen += prefixLen;
@@ -495,8 +456,6 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
     reconstrSeq = seq_create_empty_sequence(maxReconstrLen, KMER);
 
-    //elog(DEBUG1, "inLevel :%d", in->level);
-    //elog(DEBUG1, "prefixLen: %d", prefixLen);
 	if (in->level)
         sequenceCopy(reconstrSeq->data,
                      reconstructedValue->data,
@@ -521,11 +480,9 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
     
     int minusOneCheck = 0;
-    //elog(DEBUG1, "**in->nNodes: %d", in->nNodes);
 	for (i = 0; i < in->nNodes; i++)
 	{
 		int16		nodeChar = DatumGetInt16(in->nodeLabels[i]);
-        //elog(DEBUG1, "nodeChar: %d", nodeChar);
 		int			thisLen;
         int         thisSize;
 		bool		res = true;
@@ -544,12 +501,9 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
             set_base_at_index(reconstrSeq->data, maxReconstrLen - 1, nodeChar);
 			thisLen = maxReconstrLen;
 		}
-        //logSeq2(reconstrSeq, GET_VARIABLE_NAME(reconstrSeq));
 
         thisSize = seq_get_number_of_bytes_from_length(thisLen, KMER);
 
-        // elog(DEBUG1, "nodeChar: %d", nodeChar);
-        // elog(DEBUG1, "minsCheck: %d", minusOneCheck);
         if(nodeChar == -1 && minusOneCheck != 0) {
             res = minusOneCheck == 1 ? true : false;
         }
@@ -562,15 +516,10 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 			int			r;
 
 
-            //logSeq2(reconstrSeq, "reconstrSeq");
 			inSeq = DatumGetSEQP(in->scankeys[j].sk_argument);
-            //logSeq2(inSeq, GET_VARIABLE_NAME(inSeq));
 			inLen = kmer_get_length(inSeq);
 
             int commonLen = commonPrefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
-            //elog(DEBUG1, "**commonLen: %d", commonLen);
-            //elog(DEBUG1, "inLen: %d", inLen);
-            //elog(DEBUG1, "thisLen: %d", thisLen);
             int minLen = Min(inLen, thisLen);
 
 			switch (strategy)
@@ -590,7 +539,6 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 						 in->scankeys[j].sk_strategy);
 					break;
 			}
-            //elog(DEBUG1, "res: %d", res);
 
             if(nodeChar == -1){
                 minusOneCheck = res ? 1 : 2;
@@ -618,7 +566,6 @@ PG_FUNCTION_INFO_V1(spg_sequence_leaf_consistent);
 Datum
 spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 {
-    //elog(DEBUG1, "leaf_consistent");
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
 	int			level = in->level;
@@ -634,7 +581,6 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 	out->recheck = false;
 
 	leafValue = DatumGetSEQP(in->leafDatum);
-    //logSeq2(leafValue, "leafValue");
 
 	/* As above, in->reconstructedValue isn't toasted or short. */
 	if (DatumGetPointer(in->reconstructedValue))
@@ -661,7 +607,6 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 		if (kmer_get_length(leafValue) > 0)
             sequenceCopy(fullValue, leafValue->data, level, kmer_get_length(leafValue));
 		out->leafValue = PointerGetDatum(fullSeq);
-        //logSeq2(out->leafValue, "leafValue");
 	}
 
 	/* Perform the required comparison(s) */
@@ -688,7 +633,6 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 		}
 
         int commonLen = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
-        //elog(DEBUG1, "commonLen: %d", commonLen);
 
 		switch (strategy)
 		{
