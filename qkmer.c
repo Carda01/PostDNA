@@ -65,6 +65,16 @@ Datum qkmer_starts_with(PG_FUNCTION_ARGS) {
   PG_RETURN_BOOL(result);
 }
 
+PG_FUNCTION_INFO_V1(qkmer_started_with);
+Datum qkmer_started_with(PG_FUNCTION_ARGS) {
+  sequence *prefix = PG_GETARG_SEQ_P(0);
+  sequence *qkmer = PG_GETARG_SEQ_P(1);
+  bool result = seq_starts_with(qkmer, prefix, QKMER);
+  PG_FREE_IF_COPY(prefix, 0);
+  PG_FREE_IF_COPY(qkmer, 1);
+  PG_RETURN_BOOL(result);
+}
+
 PG_FUNCTION_INFO_V1(qkmer_contains);
 Datum qkmer_contains(PG_FUNCTION_ARGS) {
   sequence *qkmer = PG_GETARG_SEQ_P(0);
@@ -72,6 +82,16 @@ Datum qkmer_contains(PG_FUNCTION_ARGS) {
   bool result = qkmer_contains_internal(qkmer, kmer);
   PG_FREE_IF_COPY(qkmer, 0);
   PG_FREE_IF_COPY(kmer, 1);
+  PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(qkmer_is_contained);
+Datum qkmer_is_contained(PG_FUNCTION_ARGS) {
+  sequence *kmer = PG_GETARG_SEQ_P(0);
+  sequence *qkmer = PG_GETARG_SEQ_P(1);
+  bool result = qkmer_contains_internal(qkmer, kmer);
+  PG_FREE_IF_COPY(kmer, 0);
+  PG_FREE_IF_COPY(qkmer, 1);
   PG_RETURN_BOOL(result);
 }
 

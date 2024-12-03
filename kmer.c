@@ -77,6 +77,16 @@ Datum kmer_starts_with(PG_FUNCTION_ARGS) {
   PG_RETURN_BOOL(result);
 }
 
+PG_FUNCTION_INFO_V1(kmer_started_with);
+Datum kmer_started_with(PG_FUNCTION_ARGS) {
+  sequence *prefix = PG_GETARG_SEQ_P(0);
+  sequence *kmer = PG_GETARG_SEQ_P(1);
+  bool result = seq_starts_with(kmer, prefix, KMER);
+  PG_FREE_IF_COPY(prefix, 0);
+  PG_FREE_IF_COPY(kmer, 1);
+  PG_RETURN_BOOL(result);
+}
+
 PG_FUNCTION_INFO_V1(kmer_hash);
 Datum kmer_hash(PG_FUNCTION_ARGS) {
     sequence *seq = PG_GETARG_SEQ_P(0);
