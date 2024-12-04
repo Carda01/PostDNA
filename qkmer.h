@@ -17,6 +17,7 @@ Datum qkmer_contains(PG_FUNCTION_ARGS);
 Datum qkmer_is_contained(PG_FUNCTION_ARGS);
 
 bool qkmer_contains_internal(sequence* qkmer, sequence* kmer);
+bool qkmer_contains_until(sequence* qkmer, sequence* kmer, size_t until_len);
 bool match_Qsymbol (uint8_t symbol, uint8_t kmer_base);
 
 

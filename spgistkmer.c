@@ -1,19 +1,15 @@
 #include "spgistkmer.h"
-
-// TODO: see which includes can be removed
+#include "qkmer.h"
 
 #include "access/spgist.h"
-#include "catalog/pg_type.h"
-#include "common/int.h"
-#include "mb/pg_wchar.h"
-#include "sequence.h"
-#include "postgres.h"
 #include "utils/datum.h"
-#include "utils/fmgrprotos.h"
 #include "utils/pg_locale.h"
-#include "utils/varlena.h"
 
 #define GET_VARIABLE_NAME(Variable) (#Variable)
+
+void logSeq(sequence* seq, char* name){
+    elog(DEBUG1, "%s: %s", name, seq ? seq_sequence_to_string(seq, KMER) : "NULL");
+}
 
 void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length) {
     int data_bytes = length / 4;
@@ -172,11 +168,13 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	int			commonLen = 0;
 	int16		nodeBase = 0;
 	int			i = 0;
+    //logSeq(inSeq, "inSeq");
 
 	/* Check for prefix match, set nodeBase to first byte after prefix */
 	if (in->hasPrefix)
 	{
 		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
+        //logSeq(prefixSeq, "prefixSeq");
 
 		prefixData = prefixSeq->data;
 		prefixLen = kmer_get_length(prefixSeq);
@@ -192,8 +190,9 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		{
 			if (inLen - in->level > commonLen)
 				nodeBase = get_base_at_index(inData, in->level + commonLen);
-			else
+			else {
 				nodeBase = -1;
+            }
 		}
 		else
 		{
@@ -243,9 +242,12 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		nodeBase = -1;
 	}
 
+    
+
 	/* Look up nodeBase in the node label array */
 	if (searchBase(in->nodeLabels, in->nNodes, nodeBase, &i))
 	{
+
 		/*
 		 * Descend to existing node.  (If in->allTheSame, the core code will
 		 * ignore our nodeN specification here, but that's OK.  We still have
@@ -268,7 +270,6 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 		else
 			out->result.matchNode.restDatum =
 				formSeqDatum(NULL, 0, 0); // TODO, check if NULL works
-
     }
     else if (in->allTheSame)
     {
@@ -330,6 +331,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_picksplit);
 Datum
 spg_sequence_picksplit(PG_FUNCTION_ARGS)
 {
+    
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
 	sequence	   *seq0 = DatumGetSEQP(in->datums[0]);
@@ -340,6 +342,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
 
+    //logSeq(seq0, "seq0");
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
@@ -418,6 +421,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_inner_consistent);
 Datum
 spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 {
+
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	sequence	   *reconstructedValue;
@@ -517,23 +521,22 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 
 
 			inSeq = DatumGetSEQP(in->scankeys[j].sk_argument);
-			inLen = kmer_get_length(inSeq);
-
-            int commonLen = commonPrefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
-            int minLen = Min(inLen, thisLen);
 
 			switch (strategy)
 			{
 				case EqualStrategyNumber:
-					if (commonLen != minLen || inLen < thisLen)
-						res = false;
-					break;
 				case PrefixStrategyNumber:
-					if (commonLen != minLen)
+			        inLen = kmer_get_length(inSeq);
+
+                    int commonLen = commonPrefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
+                    int minLen = Min(inLen, thisLen);
+
+					if (commonLen != minLen || (inLen < thisLen && strategy == EqualStrategyNumber))
 						res = false;
 					break;
-                // case ContainStrategyNumber:
-                //     break;
+                case ContainStrategyNumber:
+                    res = qkmer_contains_until(inSeq, reconstrSeq, thisLen);
+                    break;
 				default:
 					elog(ERROR, "unrecognized strategy number: %d",
 						 in->scankeys[j].sk_strategy);
@@ -566,6 +569,7 @@ PG_FUNCTION_INFO_V1(spg_sequence_leaf_consistent);
 Datum
 spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 {
+    
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
 	int			level = in->level;
@@ -615,7 +619,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 	{
 		StrategyNumber strategy = in->scankeys[j].sk_strategy;
 		sequence	   *query = DatumGetSEQP(in->scankeys[j].sk_argument);
-		int			queryLen = kmer_get_length(query);
+        int            queryLen;
 		int			r;
 
 		if (strategy == PrefixStrategyNumber)
@@ -624,6 +628,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			 * if level >= length of query then reconstrValue must begin with
 			 * query (prefix) string, so we don't need to check it again.
 			 */
+            queryLen = kmer_get_length(query);
 			res = (level >= queryLen) || (seq_starts_with(out->leafValue, query, KMER));
 
 			if (!res)			/* no need to consider remaining conditions */
@@ -632,15 +637,17 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-        int commonLen = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
 
 		switch (strategy)
 		{
 			case EqualStrategyNumber:
+                queryLen = kmer_get_length(query);
+                int commonLen = commonPrefix(fullValue, query->data, 0, fullLen, queryLen);
 				res = ((commonLen == fullLen) && (commonLen == queryLen));
 				break;
-            // case ContainStrategyNumber:
-            //     break;
+            case ContainStrategyNumber:
+                res = qkmer_contains_internal(query, out->leafValue);
+                break;
 			default:
 				elog(ERROR, "unrecognized strategy number: %d",
 					 in->scankeys[j].sk_strategy);

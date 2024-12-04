@@ -143,6 +143,51 @@ bool qkmer_contains_internal(sequence* qkmer, sequence* kmer)
   return true;
 }
 
+bool qkmer_contains_until(sequence* qkmer, sequence* kmer, size_t until_len)
+{
+
+  const size_t len_qkmer = seq_get_length(qkmer, QKMER);
+  const size_t len_kmer = seq_get_length(kmer, KMER);
+  if (len_qkmer < until_len)
+  {
+      return false;
+  }
+
+
+  for (size_t i=0; i<until_len; ++i)
+  {
+  // Get the i-th query symbol.
+      uint8_t shift = 4 - 4 * (i % 2);
+      uint8_t mask = QUERY_MASK << shift;
+      uint8_t symbol = (qkmer->data[i / 2] & mask) >> shift;
+  
+  // Get the i-th kmer base.
+      uint8_t shift2 = 6 - 2 * (i % 4);
+      uint8_t mask2 = BASE_MASK << shift2;
+      uint8_t base = (kmer->data[i / 4] & mask2) >> shift2;
+  
+  if (symbol == BASE_N) // N matches to all bases
+      {continue;}
+  
+  if ((symbol>>2 & BASE_MASK) == 0) // if it's a base symbol (A,C,G,T)
+      {
+          if (symbol != base)
+              {   
+                  return false;
+              }
+          else
+              {continue;}
+      }
+  
+  if ( !match_Qsymbol (symbol, base) ) 
+      {
+          return false;
+      }
+  
+  }
+  return true;
+}
+
 
 
 bool match_Qsymbol (uint8_t symbol, uint8_t kmer_base)
