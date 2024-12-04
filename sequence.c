@@ -252,13 +252,7 @@ bool seq_equals(sequence* seq1, sequence* seq2, int type) {
     }
 
     const size_t num_bytes = seq_get_number_of_occupied_bytes(seq1);
-    for (size_t i = 0; i < num_bytes; ++i) {
-        if (seq1->data[i] != seq2->data[i]) {
-            return false;
-        }
-    }
-
-    return true;
+    return memcmp(seq1->data, seq2->data, num_bytes) == 0;
 }
 
 bool seq_starts_with(sequence* seq, sequence* prefix, int type) {
@@ -273,10 +267,9 @@ bool seq_starts_with(sequence* seq, sequence* prefix, int type) {
     const size_t num_bytes_prefix = seq_get_number_of_occupied_bytes(prefix);
     const size_t num_full_bytes_prefix = num_bytes_prefix - (seq_get_overflow(prefix_length, type) != 0 ? 1 : 0);
     // full bytes comparison
-    for (size_t i = 0; i < num_full_bytes_prefix; ++i) {
-        if (prefix->data[i] != seq->data[i]) {
-            return false;
-        }
+    
+    if (memcmp(prefix->data, seq->data, num_full_bytes_prefix) != 0){
+        return false;
     }
 
     // if the prefix has overflow, we should compare the significant bits of the prefix's last byte with the corresponding masked sequence's byte
