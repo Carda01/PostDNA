@@ -112,6 +112,10 @@ CREATE CAST (text as kmer) WITH FUNCTION kmer(text) AS IMPLICIT;
 CREATE CAST (kmer as text) WITH FUNCTION text(kmer);
 CREATE CAST (kmer AS kmer) WITH FUNCTION kmer_typmod_cast(kmer, integer) AS IMPLICIT; -- for type modifier
 
+CREATE OR REPLACE FUNCTION kmer_canonicalize(kmer)
+  RETURNS kmer 
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION generate_kmers(dna, integer)
     RETURNS SETOF kmer

@@ -13,6 +13,7 @@ Datum kmer_length(PG_FUNCTION_ARGS)
 {
     sequence *kmer = (sequence *)PG_GETARG_POINTER(0);
     size_t kmer_length = seq_get_length(kmer, KMER);  // Get the length of the kmer sequence
+    PG_FREE_IF_COPY(kmer, 0);
     PG_RETURN_UINT32(kmer_length);
 }
 
@@ -45,7 +46,6 @@ Datum kmer_cast_to_text(PG_FUNCTION_ARGS) {
     PG_FREE_IF_COPY(seq, 0);
     PG_RETURN_TEXT_P(out);
 }
-
 
 PG_FUNCTION_INFO_V1(kmer_equals);
 Datum kmer_equals(PG_FUNCTION_ARGS) {
@@ -86,6 +86,16 @@ Datum kmer_started_with(PG_FUNCTION_ARGS) {
   PG_FREE_IF_COPY(kmer, 1);
   PG_RETURN_BOOL(result);
 }
+
+PG_FUNCTION_INFO_V1(kmer_canonicalize);
+Datum kmer_canonicalize(PG_FUNCTION_ARGS)
+{
+    sequence *kmer = (sequence *)PG_GETARG_POINTER(0);
+    sequence *canonical = kmer_internal_canonicalize(kmer);
+    PG_FREE_IF_COPY(kmer, 0);
+    PG_RETURN_SEQ_P(canonical);
+}
+
 
 PG_FUNCTION_INFO_V1(kmer_hash);
 Datum kmer_hash(PG_FUNCTION_ARGS) {
@@ -161,3 +171,108 @@ Datum kmer_typmod_out(PG_FUNCTION_ARGS) {
 
     PG_RETURN_CSTRING(result);
 }
+
+
+uint8_t kmer_get_base_at_index(const uint8_t* data, int index){
+    int byte_index, overflow;
+    byte_index = index / 4;
+    overflow = index % 4;
+    uint8_t shift = 6 - 2 * overflow;
+    return (data[byte_index] >> shift) & BASE_MASK;
+}
+
+void kmer_set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
+  int byte_index = index / 4;
+  int overflow = index % 4;
+  uint8_t shift = (6 - 2 * overflow);
+  uint8_t shifted_element = nodeBase << shift;
+  uint8_t cleaner = ~(BASE_MASK << shift);
+  data[byte_index] = (data[byte_index] & cleaner) | shifted_element;
+}
+
+sequence *kmer_internal_canonicalize(sequence *kmer){
+    const size_t length = seq_get_length(kmer, KMER);
+    sequence* reverse_complement = seq_create_empty_sequence(length, KMER);
+    bool continue_building = false;
+    for(int i = length - 1; i >= 0; i--) {
+        uint8_t reverse_base = (~kmer_get_base_at_index(kmer->data, i) & BASE_MASK);
+        uint8_t compare_base = kmer_get_base_at_index(kmer->data, length-1-i);
+        if(!continue_building && compare_base < reverse_base) {
+            pfree(reverse_complement);
+            return kmer;
+        }
+        else if(reverse_base < compare_base) {
+            continue_building = true;
+        }
+        kmer_set_base_at_index(reverse_complement->data, length - 1 - i, reverse_base);
+    }
+    
+    return reverse_complement;
+}
+
+Datum
+kmer_create_subseq(const uint8_t *data, int begin, int datalen)
+{
+    sequence* seq;
+    int num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
+    uint8_t overflow = begin % 4;
+    data += (begin / 4);
+    if(overflow == 0){
+        seq = seq_create_sequence(data, datalen, num_bytes, KMER);
+    }
+    else {
+        uint8_t *new_data = (uint8_t *) palloc0(sizeof(uint8_t) * (num_bytes));
+        int bits_copied = 0;
+        for(int i = 0; bits_copied < datalen; i++){
+            new_data[i] = data[i] << (overflow * 2);
+            bits_copied += (4 - overflow);
+            if(bits_copied < datalen){
+                new_data[i] |= data[i + 1] >> ((4 - overflow)*2);
+                bits_copied += overflow;
+            }
+        }
+        seq = seq_create_sequence(new_data, datalen, num_bytes, KMER);
+        pfree(new_data);
+    }
+
+    if (datalen % 4){ 
+        uint8_t cleaner = 0x0;
+        uint8_t i = 8 - 2 * (datalen % 4);
+        while(i <= 6) {
+            cleaner |= (BASE_MASK << i); 
+            i+=2;
+        }
+        seq->data[num_bytes-1] &= cleaner;
+    }
+
+	return PointerGetDatum(seq);
+}
+
+void kmer_fill_copy(uint8_t* target, uint8_t* source, int target_start, int length) {
+    int data_bytes = length / 4;
+    int overflow = length % 4;
+    int start_byte = target_start / 4;
+    int start_overflow = target_start % 4;
+    int bits_copied = 0;
+    for (int i = 0; bits_copied < length; i++) {
+        target[start_byte + i] |= source[i] >> (start_overflow * 2);
+        bits_copied += 4 - start_overflow;
+        if(bits_copied < length) {
+            target[start_byte + i + 1] |= source[i] << ((4 - start_overflow) * 2);
+            bits_copied += start_overflow;
+        }
+    }
+    
+    int final_length = target_start + 1 + length;
+    int final_size = seq_get_number_of_bytes_from_length(final_length, KMER);
+    if ((final_length) % 4){ 
+        uint8_t cleaner = 0x0;
+        uint8_t i = 8 - 2 * (final_length % 4);
+        while(i <= 6) {
+            cleaner |= (BASE_MASK << i); 
+            i+=2;
+        }
+        target[final_size - 1] &= cleaner;
+    }
+}
+
