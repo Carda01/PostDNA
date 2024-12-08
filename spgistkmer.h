@@ -18,14 +18,10 @@ typedef struct spgNodePtr
 } spgNodePtr;
 
 
-void sequenceCopy(uint8_t* target, uint8_t* source, int target_start, int length);
-void set_base_at_index(uint8_t* data, int index, uint8_t nodeBase);
 inline size_t kmer_get_length(sequence* seq);
-inline uint8_t get_base_at_index(const uint8_t* data, int index);
 
-static Datum formSeqDatum(const uint8_t *data, int begin, int datalen);
-static int commonPrefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb);
-static bool searchChar(Datum *nodeLabels, int nNodes, int16 c, int *i);
+static int common_prefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb);
+static bool search_base(Datum *nodeLabels, int nNodes, int16 c, int *i);
 
 Datum spg_sequence_config(PG_FUNCTION_ARGS);
 Datum spg_sequence_choose(PG_FUNCTION_ARGS);

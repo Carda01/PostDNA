@@ -70,7 +70,8 @@ size_t seq_get_number_of_occupied_bytes(sequence* seq) {
 }
 
 size_t seq_get_length(sequence* seq, int type){
-  return (VARSIZE(seq) - sizeof(sequence) - sizeof(uint8_t)) * seq_bases_per_byte(type) + (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
+  return (VARSIZE(seq) - sizeof(sequence) - 1) * seq_bases_per_byte(type) +
+      (seq->overflow == 0 ? seq_bases_per_byte(type) : seq->overflow);
 }
 
 uint8_t seq_get_overflow(size_t seq_length, int type) {
