@@ -10,6 +10,7 @@ Datum qkmer_length(PG_FUNCTION_ARGS)
 {
     sequence *qkmer = (sequence *)PG_GETARG_POINTER(0);
     size_t qkmer_length = seq_get_length(qkmer, QKMER);  // Get the length of the qkmer sequence
+    PG_FREE_IF_COPY(qkmer, 0);
     PG_RETURN_UINT32(qkmer_length);
 }
 

@@ -14,6 +14,7 @@ Datum dna_length(PG_FUNCTION_ARGS)
 {
     sequence *dna = (sequence *)PG_GETARG_POINTER(0);
     size_t length = seq_get_length(dna, DNA);  
+    PG_FREE_IF_COPY(dna, 0);
     PG_RETURN_UINT32(length);
 }
 
