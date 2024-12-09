@@ -6,12 +6,6 @@
 #include "utils/datum.h"
 #include "utils/pg_locale.h"
 
-#define GET_VARIABLE_NAME(Variable) (#Variable)
-
-void logSeq(sequence* seq, char* name){
-    elog(DEBUG1, "%s: %s", name, seq ? seq_sequence_to_string(seq, KMER) : "NULL");
-}
-
 inline size_t kmer_get_length(sequence* seq) {
     return seq_get_length(seq, KMER);
 }
@@ -22,10 +16,12 @@ inline size_t kmer_get_length(sequence* seq) {
 static int
 common_prefix(const uint8_t *a, const uint8_t *b, int starta, int lena, int lenb)
 {
-	int			i = 0;
+	int i = 0;
 
-	while (i < lena && i < lenb && kmer_get_base_at_index(a, i + starta) == kmer_get_base_at_index(b, i))
-	{
+	while (i < lena &&
+           i < lenb &&
+           kmer_get_base_at_index(a, i + starta) == kmer_get_base_at_index(b, i))
+    {
 		i++;
 	}
 
@@ -78,13 +74,11 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 	int			commonLen = 0;
 	int16		nodeBase = 0;
 	int			i = 0;
-    //logSeq(inSeq, "inSeq");
 
 	/* Check for prefix match, set nodeBase to first byte after prefix */
 	if (in->hasPrefix)
 	{
 		sequence	   *prefixSeq = DatumGetSEQP(in->prefixDatum);
-        //logSeq(prefixSeq, "prefixSeq");
 
 		prefixData = prefixSeq->data;
 		prefixLen = kmer_get_length(prefixSeq);
@@ -252,7 +246,6 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
 	/* Identify longest common prefix, if any */
     commonLen = kmer_get_length(seq0);
 
-    //logSeq(seq0, "seq0");
 	for (i = 1; i < in->nTuples && commonLen > 0; i++)
 	{
 		sequence	   *seqi = DatumGetSEQP(in->datums[i]);
@@ -438,10 +431,15 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 				case PrefixStrategyNumber:
 			        inLen = kmer_get_length(inSeq);
 
-                    int commonLen = common_prefix(reconstrSeq->data, inSeq->data, 0, inLen, thisLen);
+                    int commonLen = common_prefix(reconstrSeq->data,
+                            inSeq->data,
+                            0,
+                            inLen,
+                            thisLen);
                     int minLen = Min(inLen, thisLen);
 
-					if (commonLen != minLen || (inLen < thisLen && strategy == EqualStrategyNumber))
+					if (commonLen != minLen || 
+                            (inLen < thisLen && strategy == EqualStrategyNumber))
 						res = false;
 					break;
                 case ContainStrategyNumber:

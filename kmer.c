@@ -181,13 +181,13 @@ uint8_t kmer_get_base_at_index(const uint8_t* data, int index){
     return (data[byte_index] >> shift) & BASE_MASK;
 }
 
-void kmer_set_base_at_index(uint8_t* data, int index, uint8_t nodeBase) {
+void kmer_set_base_at_index(uint8_t* data, int index, uint8_t base) {
   int byte_index = index / 4;
   int overflow = index % 4;
-  uint8_t shift = (6 - 2 * overflow);
-  uint8_t shifted_element = nodeBase << shift;
+  uint8_t shift = 6 - 2 * overflow;
+  uint8_t shifted_base = base << shift;
   uint8_t cleaner = ~(BASE_MASK << shift);
-  data[byte_index] = (data[byte_index] & cleaner) | shifted_element;
+  data[byte_index] = (data[byte_index] & cleaner) | shifted_base;
 }
 
 sequence *kmer_internal_canonicalize(sequence *kmer){
@@ -210,34 +210,35 @@ sequence *kmer_internal_canonicalize(sequence *kmer){
     return reverse_complement;
 }
 
+
 Datum
-kmer_create_subseq(const uint8_t *data, int begin, int datalen)
+kmer_create_subseq(const uint8_t *data, int begin, int length)
 {
     sequence* seq;
-    int num_bytes = seq_get_number_of_bytes_from_length(datalen, KMER);
-    uint8_t overflow = begin % 4;
+    const size_t num_bytes = seq_get_number_of_bytes_from_length(length, KMER);
+    const uint8_t overflow = begin % 4;
     data += (begin / 4);
     if(overflow == 0){
-        seq = seq_create_sequence(data, datalen, num_bytes, KMER);
+        seq = seq_create_sequence(data, length, num_bytes, KMER);
     }
     else {
         uint8_t *new_data = (uint8_t *) palloc0(sizeof(uint8_t) * (num_bytes));
         int bits_copied = 0;
-        for(int i = 0; bits_copied < datalen; i++){
+        for(int i = 0; bits_copied < length; i++){
             new_data[i] = data[i] << (overflow * 2);
             bits_copied += (4 - overflow);
-            if(bits_copied < datalen){
+            if(bits_copied < length){
                 new_data[i] |= data[i + 1] >> ((4 - overflow)*2);
                 bits_copied += overflow;
             }
         }
-        seq = seq_create_sequence(new_data, datalen, num_bytes, KMER);
+        seq = seq_create_sequence(new_data, length, num_bytes, KMER);
         pfree(new_data);
     }
 
-    if (datalen % 4){ 
+    if (length % 4){ 
         uint8_t cleaner = 0x0;
-        uint8_t i = 8 - 2 * (datalen % 4);
+        uint8_t i = 8 - 2 * (length % 4);
         while(i <= 6) {
             cleaner |= (BASE_MASK << i); 
             i+=2;
