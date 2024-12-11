@@ -3,6 +3,7 @@
 #include "kmer.h"
 
 #include "access/spgist.h"
+#include "sequence.h"
 #include "utils/datum.h"
 #include "utils/pg_locale.h"
 
@@ -173,7 +174,7 @@ spg_sequence_choose(PG_FUNCTION_ARGS)
 							 inLen - in->level - levelAdd);
 		else
 			out->result.matchNode.restDatum =
-				kmer_create_subseq(NULL, 0, 0); // TODO, check if NULL works
+				kmer_create_subseq(NULL, 0, 0);
     }
     else if (in->allTheSame)
     {
@@ -311,7 +312,7 @@ spg_sequence_picksplit(PG_FUNCTION_ARGS)
                                  commonLen + 1,
 								 kmer_get_length(seqi) - commonLen - 1);
 		else
-			leafD = kmer_create_subseq(NULL, 0, 0); // TODO: check if it works when passing null
+			leafD = kmer_create_subseq(NULL, 0, 0);
 
 		out->leafTupleDatums[nodes[i].i] = leafD;
 		out->mapTuplesToNodes[nodes[i].i] = out->nNodes - 1;
@@ -431,12 +432,12 @@ spg_sequence_inner_consistent(PG_FUNCTION_ARGS)
 				case PrefixStrategyNumber:
 			        inLen = kmer_get_length(inSeq);
 
+                    int minLen = Min(inLen, thisLen);
                     int commonLen = common_prefix(reconstrSeq->data,
                             inSeq->data,
                             0,
-                            inLen,
-                            thisLen);
-                    int minLen = Min(inLen, thisLen);
+                            minLen,
+                            minLen);
 
 					if (commonLen != minLen || 
                             (inLen < thisLen && strategy == EqualStrategyNumber))
@@ -549,9 +550,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 		switch (strategy)
 		{
 			case EqualStrategyNumber:
-                queryLen = kmer_get_length(query);
-                int commonLen = common_prefix(fullValue, query->data, 0, fullLen, queryLen);
-				res = ((commonLen == fullLen) && (commonLen == queryLen));
+                res = seq_equals(out->leafValue, query, KMER);
 				break;
             case ContainStrategyNumber:
                 res = qkmer_contains_internal(query, out->leafValue);
