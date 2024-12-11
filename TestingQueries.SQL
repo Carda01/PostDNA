@@ -119,9 +119,15 @@ SELECT kmer
 FROM kmers 
 WHERE kmer ^@ 'ACGT';
 
--- Test contains with kmer
+-- Test contains
 --EXPLAIN ANALYZE
 SELECT kmer
+FROM kmers
+WHERE 'ACG'::qkmer @> kmer;
+
+-- Test contains with qkmer
+EXPLAIN ANALYZE
+SELECT DISTINCT kmer
 FROM kmers
 WHERE 'ANGTA'::qkmer @> kmer;
 
@@ -130,11 +136,11 @@ WHERE 'ANGTA'::qkmer @> kmer;
 CREATE INDEX kmer_hash_idx ON kmers USING hash (kmer);
 set enable_seqscan = off;
 
--- Test contains with kmer
+-- Test index performance
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
-WHERE 'ACG' @> kmer;
+WHERE kmer = 'ACGTA'::kmer;
 
 drop index kmer_hash_idx;
 
@@ -153,11 +159,17 @@ SELECT kmer
 FROM kmers 
 WHERE kmer ^@ 'ACGT';
 
--- Test contains with kmer
+-- Test contains
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
-WHERE 'ANGTA' @> kmer;
+WHERE 'ACG'::qkmer @> kmer;
+
+-- Test contains with qkmer
+EXPLAIN ANALYZE
+SELECT kmer
+FROM kmers
+WHERE 'ANGTA'::qkmer @> kmer;
 
 set enable_seqscan = on;
 drop index kmer_spgist_idx;
