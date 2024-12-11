@@ -538,7 +538,7 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 			 * query (prefix) string, so we don't need to check it again.
 			 */
             queryLen = kmer_get_length(query);
-			res = (level >= queryLen) || (seq_starts_with(out->leafValue, query, KMER));
+			res = (level >= queryLen) || (seq_starts_with(DatumGetSEQP(out->leafValue), query, KMER));
 
 			if (!res)			/* no need to consider remaining conditions */
 				break;
@@ -550,10 +550,10 @@ spg_sequence_leaf_consistent(PG_FUNCTION_ARGS)
 		switch (strategy)
 		{
 			case EqualStrategyNumber:
-                res = seq_equals(out->leafValue, query, KMER);
+                res = seq_equals(DatumGetSEQP(out->leafValue), query, KMER);
 				break;
             case ContainStrategyNumber:
-                res = qkmer_contains_internal(query, out->leafValue);
+                res = qkmer_contains_internal(query, DatumGetSEQP(out->leafValue));
                 break;
 			default:
 				elog(ERROR, "unrecognized strategy number: %d",
