@@ -114,16 +114,16 @@ FROM kmers
 WHERE kmer = 'ACGTA'::kmer;
 
 -- Test starts_with with kmer
-EXPLAIN ANALYZE
+--EXPLAIN ANALYZE
 SELECT kmer 
 FROM kmers 
 WHERE kmer ^@ 'ACGT';
 
 -- Test contains with kmer
-EXPLAIN ANALYZE
+--EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
-WHERE 'ACG' @> kmer;
+WHERE 'ANGTA'::qkmer @> kmer;
 
 -- hash index
 
@@ -157,7 +157,7 @@ WHERE kmer ^@ 'ACGT';
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
-WHERE 'ACG' @> kmer;
+WHERE 'ANGTA' @> kmer;
 
 set enable_seqscan = on;
 drop index kmer_spgist_idx;
