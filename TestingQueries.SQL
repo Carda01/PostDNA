@@ -46,15 +46,19 @@ SELECT COUNT(*) AS matching_kmers
 FROM kmers
 WHERE kmer = 'GTGTA'::kmer;
 
--- -- Test k-mer prefix matching (using the correct operator)
--- SELECT DISTINCT kmer
--- FROM kmers
--- WHERE kmer @> 'ACG'::kmer;  -- Correct operator for prefix matching
+-- Test k-mer prefix matching (using the correct operator)
+SELECT DISTINCT kmer
+FROM kmers
+WHERE 'ANGTA' @> kmer;  -- Correct operator for prefix matching
 
--- -- Test pattern matching with qkmer
--- SELECT DISTINCT kmer
--- FROM kmers
--- WHERE 'ANGTA'::qkmer @> kmer;
+-- Test starts_with with qkmer
+SELECT * FROM kmers WHERE kmer ^@ 'TACG';
+
+
+-- Test pattern matching with qkmer
+SELECT DISTINCT kmer
+FROM kmers
+WHERE 'ANGTA'::qkmer @> kmer;
 
 -- Test k-mer counting
 SELECT kmer, COUNT(*) AS frequency
@@ -62,11 +66,6 @@ FROM kmers
 GROUP BY kmer
 ORDER BY frequency DESC
 LIMIT 10;
-
--- Test k-mer containment with qkmer
-SELECT DISTINCT kmer
-FROM kmers
-WHERE 'ANGTA'::qkmer @> kmer;
 
 -- Most frequent k-mers
 SELECT kmer, COUNT(*) AS frequency
@@ -84,56 +83,37 @@ ORDER BY s.seq_id, frequency DESC
 LIMIT 10;
 
 -- Create SP-GiST index
-CREATE INDEX kushari ON kmers USING SPGIST(kmer);
-
-
-select * from kmers where kmer='ACTCA';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- CREATE INDEX kushari ON kmers USING SPGIST(kmer);
+-- select * from kmers where kmer='ACTCA';
 
 
 CREATE INDEX kmer_spgist_idx ON kmers USING spgist (kmer);
-
+set enable_seqscan = off;
 -- Test index performance
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
 WHERE kmer = 'ACGTA'::kmer;
 
+-- Test starts_with with qkmer
+EXPLAIN ANALYZE
+SELECT kmer 
+FROM kmers 
+WHERE kmer ^@ 'ACGT';
+
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
-WHERE kmer @> 'ACG'::kmer;
+WHERE 'ACG' @> kmer;
 
 EXPLAIN ANALYZE
 SELECT kmer
 FROM kmers
 WHERE 'ANGTA'::qkmer @> kmer;
+set enable_seqscan = on;
 
--- Clean up
-DROP TABLE IF EXISTS kmers;
-DROP TABLE IF EXISTS dna_sequences;
-DROP INDEX IF EXISTS kmer_spgist_idx;
+
+-- -- Clean up
+-- DROP TABLE IF EXISTS kmers;
+-- DROP TABLE IF EXISTS dna_sequences;
+-- DROP INDEX IF EXISTS kmer_spgist_idx;
