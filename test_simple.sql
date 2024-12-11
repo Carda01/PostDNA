@@ -1,9 +1,11 @@
 drop table t;
 drop table t2;
+drop table t3;
 drop TABLE test_typmod;
 drop table km;
 DROP TABLE kmers;
 DROP TABLE qkmers;
+DROP INDEX idxxxmm;
 
 drop extension if exists postdna;
 
@@ -165,3 +167,56 @@ from t2
 where kmer_canonicalize(kmer) not in (select kmer from kmers) 
 group by kmer
 ;
+ 
+
+
+---------------------------------------------------------------------------------------------------------------------------
+
+--index
+
+CREATE TABLE t3 (kmer kmer);
+
+select pg_relation_size('t3');
+
+-- insert > 20 Milion values
+
+INSERT INTO t3 (kmer)
+SELECT 'ACTGCC'
+FROM generate_series(1, 5000);
+
+INSERT INTO t3 (kmer)
+SELECT 'ACGGCT'
+FROM generate_series(1, 5000000);
+
+INSERT INTO t3 (kmer)
+SELECT 'ACTCGT'
+FROM generate_series(1, 4500000);
+
+INSERT INTO t3 (kmer)
+SELECT 'GGGGGG'
+FROM generate_series(1, 10000000);
+
+INSERT INTO t3 (kmer)
+SELECT 'CTACTA'
+FROM generate_series(1, 5000);
+
+
+
+Explain analyze select * from t3 where kmer='CTACTA';
+
+Explain analyze select * from t3 where kmer ^@ 'CTAC';
+
+Explain analyze select * from t3 where 'NNNNNN' @> kmer;
+
+CREATE INDEX idxxxmm ON t3 USING SPGIST(kmer);
+
+SET enable_seqscan TO off;
+
+
+Explain analyze select * from t3 where kmer='CTACTA';
+
+Explain analyze select * from t3 where kmer ^@ 'CTAC';
+
+Explain analyze select * from t3 where 'NNNNNN' @> kmer;
+
+SET enable_seqscan TO on;
