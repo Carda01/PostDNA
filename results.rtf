@@ -1,0 +1,31 @@
+{\rtf1\ansi\ansicpg1251\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\froman\fcharset0 Times-Roman;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww17000\viewh12480\viewkind0
+\deftab720
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 No index\
+Equal Function\
+"Seq Scan on kmers (cost=10000000000.00..10000596243.70 rows=572 width=10) (actual time=0.891..1076.090 rows=5644 loops=1)" " Filter: (kmer = 'ACGTA'::kmer)" " Rows Removed by Filter: 30027303" "Planning Time: 0.068 ms" "Execution Time: 1076.220 ms"\
+starts_with\
+"QUERY PLAN" "Seq Scan on kmers (cost=10000000000.00..10000596243.70 rows=15016508 width=10) (actual time=0.404..1110.929 rows=55257 loops=1)" " Filter: (kmer ^@ 'ACGT'::kmer)" " Rows Removed by Filter: 29977690" "Planning Time: 0.035 ms" "Execution Time: 1111.875 ms"\
+contains\
+"QUERY PLAN" "Seq Scan on kmers (cost=10000000000.00..10000596243.70 rows=15016508 width=10) (actual time=0.395..1116.351 rows=55257 loops=1)" " Filter: (kmer ^@ 'ACGT'::kmer)" " Rows Removed by Filter: 29977690" "Planning Time: 0.083 ms" "Execution Time: 1117.268 ms"\
+Spgist index\
+Equal Function\
+"QUERY PLAN" "Index Only Scan using kmer_spgist_idx on kmers (cost=0.42..22.43 rows=572 width=10) (actual time=0.913..3.154 rows=5644 loops=1)" " Index Cond: (kmer = 'ACGTA'::kmer)" " Heap Fetches: 0" "Planning Time: 2.064 ms" "Execution Time: 3.396 ms"\
+starts_with\
+"QUERY PLAN" "Index Only Scan using kmer_spgist_idx on kmers (cost=0.42..506344.71 rows=15016474 width=10) (actual time=0.149..17.509 rows=55257 loops=1)" " Index Cond: (kmer ^@ 'ACGT'::kmer)" " Heap Fetches: 0" "Planning Time: 0.306 ms" "Execution Time: 19.516 ms"\
+contains\
+"QUERY PLAN" "Index Only Scan using kmer_spgist_idx on kmers (cost=0.42..506344.71 rows=15016474 width=10) (actual time=0.017..0.017 rows=0 loops=1)" " Index Cond: (kmer <@ 'ACG'::qkmer)" " Heap Fetches: 0" "Planning Time: 0.124 ms" "Execution Time: 0.082 ms"\
+Hash Index\
+equals\
+"QUERY PLAN" "Bitmap Heap Scan on kmers (cost=20.43..2228.25 rows=572 width=10) (actual time=1.641..36.521 rows=5644 loops=1)" " Recheck Cond: (kmer = 'ACGTA'::kmer)" " Heap Blocks: exact=5511" " -> Bitmap Index Scan on kmer_hash_idx (cost=0.00..20.29 rows=572 width=0) (actual time=0.900..0.901 rows=5644 loops=1)" " Index Cond: (kmer = 'ACGTA'::kmer)" "Planning Time: 0.791 ms" "Execution Time: 36.817 ms"\
+starts_with\
+"QUERY PLAN" "Bitmap Heap Scan on kmers (cost=20.43..2228.25 rows=572 width=10) (actual time=2.186..8.183 rows=5644 loops=1)" " Recheck Cond: (kmer = 'ACGTA'::kmer)" " Heap Blocks: exact=5511" " -> Bitmap Index Scan on kmer_hash_idx (cost=0.00..20.29 rows=572 width=0) (actual time=1.096..1.096 rows=5644 loops=1)" " Index Cond: (kmer = 'ACGTA'::kmer)" "Planning Time: 0.125 ms" "Execution Time: 8.438 ms"\
+contains\
+"QUERY PLAN" "Seq Scan on kmers (cost=10000000000.00..10000596242.85 rows=15016474 width=10) (actual time=1056.822..1056.822 rows=0 loops=1)" " Filter: ('ACG'::qkmer @> kmer)" " Rows Removed by Filter: 30032947" "Planning Time: 0.687 ms" "Execution Time: 1056.942 ms"\
+}
